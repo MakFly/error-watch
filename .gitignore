@@ -14,6 +14,9 @@ logs/
 .idea/
 .vscode/
 
+# Claude Code agent memory (machine-local, not versioned)
+**/.claude/agent-memory/
+
 # Playwright MCP (Cursor)
 .playwright-mcp/
 
