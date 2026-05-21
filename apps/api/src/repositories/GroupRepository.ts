@@ -39,6 +39,29 @@ function decodeCursor(cursor: string): { lastSeen: Date; fingerprint: string } |
   }
 }
 
+/**
+ * Effective HTTP status code for a single error_events row aliased `le`:
+ * the canonical `status_code` column, falling back to `debug->>'status_code'`
+ * (Web Profiler payload from the SDK `profile` field).
+ *
+ * `debug` is loosely typed (record(any)), so `debug->>'status_code'` may be a
+ * non-numeric string ("unknown", an object, …). Casting that directly with
+ * `::int` throws `22P02 invalid_text_representation` and aborts the whole
+ * groups query. The `CASE` guard only casts when the text matches the HTTP
+ * status shape — exactly three digits (Postgres evaluates CASE branches
+ * lazily). `^[0-9]{3}$` (not `^\d+$`) is deliberate: it also rejects an
+ * over-long digit string that would otherwise pass the cast and then throw
+ * `22003 numeric_value_out_of_range`. Anything else yields NULL and falls
+ * through the COALESCE — the intended graceful path.
+ */
+const effectiveEventStatusCodeSql = sql`
+  COALESCE(
+    le.status_code,
+    CASE WHEN le.debug->>'status_code' ~ '^[0-9]{3}$'
+         THEN (le.debug->>'status_code')::int END
+  )
+`;
+
 export const GroupRepository = {
   /**
    * Optimized findAll using single query with LEFT JOIN for replay data
@@ -98,7 +121,7 @@ export const GroupRepository = {
         COALESCE(
           ${errorGroups.statusCode},
           (
-            SELECT COALESCE(le.status_code, NULLIF(le.debug->>'status_code', '')::int)
+            SELECT ${effectiveEventStatusCodeSql}
             FROM error_events le
             WHERE le.fingerprint = ${errorGroups.fingerprint}
             ORDER BY le.created_at DESC
@@ -193,7 +216,7 @@ export const GroupRepository = {
           le.id          AS evt_id,
           le.trace_id    AS evt_trace_id,
           COALESCE(le.url, NULLIF(le.request->>'url', ''), NULLIF(le.debug->>'url', '')) AS evt_url,
-          COALESCE(le.status_code, NULLIF(le.debug->>'status_code', '')::int) AS evt_status_code,
+          ${effectiveEventStatusCodeSql} AS evt_status_code,
           COALESCE(NULLIF(le.request->>'method', ''), NULLIF(le.debug->>'method', '')) AS evt_method,
           -- Pick the deepest in_app frame as the "where it threw" anchor.
           -- Sentry convention: frames are oldest→newest, so the last in_app frame is the throw site.
@@ -380,7 +403,7 @@ export const GroupRepository = {
           le.id          AS evt_id,
           le.trace_id    AS evt_trace_id,
           COALESCE(le.url, NULLIF(le.request->>'url', ''), NULLIF(le.debug->>'url', '')) AS evt_url,
-          COALESCE(le.status_code, NULLIF(le.debug->>'status_code', '')::int) AS evt_status_code,
+          ${effectiveEventStatusCodeSql} AS evt_status_code,
           COALESCE(NULLIF(le.request->>'method', ''), NULLIF(le.debug->>'method', '')) AS evt_method,
           -- Pick the deepest in_app frame as the "where it threw" anchor.
           -- Sentry convention: frames are oldest→newest, so the last in_app frame is the throw site.
