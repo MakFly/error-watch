@@ -52,6 +52,18 @@ function getAggregationSource(dateRange: ExtendedDateRange | undefined): "raw" |
 const emptyArrayToObject = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((val) => (Array.isArray(val) && val.length === 0 ? {} : val), schema);
 
+// SDKs may report transaction statuses outside the canonical set — e.g. the
+// PHP SDK sends "unknown_error" for 4xx responses. Coerce any unknown non-null
+// value to "error" so one out-of-contract field never drops the whole
+// transaction (null/undefined pass through to keep the field optional).
+const CANONICAL_TX_STATUSES = ["ok", "error", "cancelled"];
+const coerceTxStatus = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(
+    (val) =>
+      val == null || CANONICAL_TX_STATUSES.includes(val as string) ? val : "error",
+    schema
+  );
+
 const metricSchema = z.object({
   type: z.enum(["web_vitals", "page_load", "custom"]),
   name: z.string().min(1).max(100),
@@ -81,7 +93,7 @@ const transactionSchema = z.object({
   op: z.string().min(1).max(100),
   traceId: z.string().nullable().optional(),
   parentSpanId: z.string().nullable().optional(),
-  status: z.enum(["ok", "error", "cancelled"]).nullable().optional(),
+  status: coerceTxStatus(z.enum(["ok", "error", "cancelled"]).nullable().optional()),
   startTimestamp: z.number(),
   endTimestamp: z.number(),
   spans: z.array(spanSchema).optional(),
