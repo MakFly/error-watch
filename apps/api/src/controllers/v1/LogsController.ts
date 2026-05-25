@@ -12,7 +12,7 @@ import { publishEvent } from "../../sse/publisher";
 const LEVELS = ["debug", "info", "warning", "error"] as const;
 const SOURCES = ["http", "cli", "messenger", "deprecation", "app"] as const;
 
-const logsIngestSchema = z.object({
+export const logsIngestSchema = z.object({
   timestamp: z.number().optional(),
   level: z.enum(LEVELS),
   channel: z.string().min(1).max(100),
@@ -65,6 +65,54 @@ async function shouldAcceptLog(projectId: string): Promise<{ accept: boolean; sa
   const keep = Math.random() >= dropProbability;
 
   return { accept: keep, sampled: !keep };
+}
+
+/**
+ * Build a scrubbed `application_logs` insert row from a validated log payload.
+ * Shared by the single-log endpoint and the batch endpoint so PII scrubbing
+ * and column mapping stay identical. Returns the row plus an SSE summary.
+ */
+export function buildLogRow(
+  input: z.infer<typeof logsIngestSchema>,
+  projectId: string,
+): { row: typeof applicationLogs.$inferInsert; sse: Record<string, unknown> } {
+  const createdAt = input.timestamp
+    ? (input.timestamp < 1e12 ? new Date(input.timestamp * 1000) : new Date(input.timestamp))
+    : new Date();
+
+  const sanitizedMessage = scrubPII(input.message);
+  const entryId = crypto.randomUUID();
+
+  return {
+    row: {
+      id: entryId,
+      projectId,
+      createdAt,
+      level: input.level,
+      channel: input.channel,
+      message: sanitizedMessage,
+      context: scrubPIIValue(input.context ?? null),
+      extra: scrubPIIValue(input.extra ?? null),
+      env: input.env ?? null,
+      release: input.release ?? null,
+      source: input.source ?? "app",
+      url: input.url ? scrubPII(input.url) : null,
+      requestId: input.request_id ? scrubPII(input.request_id) : null,
+      userId: input.user_id ?? null,
+      traceId: input.trace_id ?? null,
+      spanId: input.span_id ?? null,
+    },
+    sse: {
+      id: entryId,
+      timestamp: createdAt.toISOString(),
+      level: input.level,
+      channel: input.channel,
+      message: sanitizedMessage,
+      source: input.source ?? "app",
+      env: input.env ?? null,
+      release: input.release ?? null,
+    },
+  };
 }
 
 export const ingest = async (c: Context) => {

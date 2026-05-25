@@ -106,10 +106,60 @@ const metricsPayloadSchema = z.object({
   env: z.string().max(50).default("production"),
 });
 
-const transactionPayloadSchema = z.object({
+export const transactionPayloadSchema = z.object({
   transaction: transactionSchema,
   env: z.string().max(50).default("production"),
 });
+
+/**
+ * Persist a validated transaction (+ its spans) to the DB. Shared by the
+ * single-transaction endpoint and the batch endpoint. Returns the transaction id.
+ */
+export async function persistTransaction(
+  input: z.infer<typeof transactionPayloadSchema>,
+  projectId: string,
+): Promise<string> {
+  const { transaction } = input;
+  const now = new Date();
+  const duration = Math.round(transaction.endTimestamp - transaction.startTimestamp);
+
+  await db.insert(transactions).values({
+    id: transaction.id,
+    projectId,
+    name: transaction.name,
+    op: transaction.op,
+    traceId: transaction.traceId || null,
+    parentSpanId: transaction.parentSpanId || null,
+    status: transaction.status || null,
+    duration,
+    startTimestamp: new Date(transaction.startTimestamp),
+    endTimestamp: new Date(transaction.endTimestamp),
+    tags: transaction.tags ?? null,
+    data: transaction.data ? normalizeTransactionData(transaction.data) : null,
+    env: input.env,
+    createdAt: now,
+  });
+
+  if (transaction.spans && transaction.spans.length > 0) {
+    await db.insert(spans).values(
+      transaction.spans.map((span) => ({
+        id: span.id,
+        transactionId: transaction.id,
+        parentSpanId: span.parentSpanId || null,
+        traceId: transaction.traceId || null,
+        op: span.op,
+        description: span.description || null,
+        status: span.status || null,
+        duration: Math.round(span.endTimestamp - span.startTimestamp),
+        startTimestamp: new Date(span.startTimestamp),
+        endTimestamp: new Date(span.endTimestamp),
+        data: span.data ?? null,
+      })),
+    );
+  }
+
+  return transaction.id;
+}
 
 /**
  * Submit performance metrics from SDK
@@ -221,47 +271,7 @@ export const submitTransaction = async (c: Context<AppEnv>) => {
       return c.json({ error: "Invalid API key", code: "INVALID_API_KEY" }, 401);
     }
 
-    const now = new Date();
-    const duration = Math.round(transaction.endTimestamp - transaction.startTimestamp);
-
-    // Insert transaction (pass objects directly — drizzle jsonb handles serialization;
-    // pre-stringifying would store the JSON as a JSONB text value, breaking `data->>'key'`)
-    await db.insert(transactions).values({
-      id: transaction.id,
-      projectId,
-      name: transaction.name,
-      op: transaction.op,
-      traceId: transaction.traceId || null,
-      parentSpanId: transaction.parentSpanId || null,
-      status: transaction.status || null,
-      duration,
-      startTimestamp: new Date(transaction.startTimestamp),
-      endTimestamp: new Date(transaction.endTimestamp),
-      tags: transaction.tags ?? null,
-      data: transaction.data ? normalizeTransactionData(transaction.data) : null,
-      env: input.env,
-      createdAt: now,
-    });
-
-    // Insert spans if any
-    if (transaction.spans && transaction.spans.length > 0) {
-      for (const span of transaction.spans) {
-        const spanDuration = Math.round(span.endTimestamp - span.startTimestamp);
-        await db.insert(spans).values({
-          id: span.id,
-          transactionId: transaction.id,
-          parentSpanId: span.parentSpanId || null,
-          traceId: transaction.traceId || null,
-          op: span.op,
-          description: span.description || null,
-          status: span.status || null,
-          duration: spanDuration,
-          startTimestamp: new Date(span.startTimestamp),
-          endTimestamp: new Date(span.endTimestamp),
-          data: span.data ?? null,
-        });
-      }
-    }
+    await persistTransaction(input, projectId);
 
     logger.info("Stored transaction", {
       transactionId: transaction.id,

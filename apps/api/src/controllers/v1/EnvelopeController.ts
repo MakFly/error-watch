@@ -31,7 +31,7 @@ const frameSchema = z.object({
   module: z.string().max(500).optional(),
 }).passthrough();
 
-const envelopeSchema = z.object({
+export const envelopeSchema = z.object({
   // Sentry-style core
   event_id: z.string().min(1).max(64).optional(),
   timestamp: z.union([z.number(), z.string()]).optional(),
@@ -123,6 +123,83 @@ function toMilliseconds(ts: number | string | undefined): number {
   return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
 }
 
+/**
+ * Translate a validated envelope into the internal flat schema and enqueue it
+ * on the events worker. Shared by the single-envelope endpoint and the batch
+ * endpoint. Performs short-window dedup; returns `deduplicated: true` when the
+ * event was suppressed. Caller is responsible for auth / settings / quota.
+ */
+export async function enqueueEnvelopeEvent(
+  input: z.infer<typeof envelopeSchema>,
+  projectId: string,
+): Promise<{ queued: boolean; deduplicated?: boolean }> {
+  const frames = extractFrames(input);
+  const topFrame = pickFrame(frames);
+
+  const file = topFrame?.filename || topFrame?.abs_path || "[unknown]";
+  const line = Math.max(1, topFrame?.lineno ?? 1);
+
+  const exceptionType =
+    input.exception?.type ?? input.exception?.values?.[0]?.type ?? undefined;
+  const exceptionValue =
+    input.exception?.value ?? input.exception?.values?.[0]?.value ?? undefined;
+  const message = exceptionValue || input.message || exceptionType || "Unknown error";
+
+  const stack = reconstructStackString(frames, message);
+  const createdAtMs = toMilliseconds(input.timestamp);
+
+  const dedupFingerprint = createHash("sha1")
+    .update(`${projectId}|${message}|${file}|${line}`)
+    .digest("hex");
+  const dedupKey = `dedup:env:${projectId}:${dedupFingerprint}`;
+  if (await redis.get(dedupKey)) {
+    return { queued: false, deduplicated: true };
+  }
+  await redis.setex(dedupKey, 10, "1");
+
+  const shouldLinkReplay = ["fatal", "error"].includes(input.level);
+  const jobId = `env-${projectId}-${dedupFingerprint}-${Math.floor(Date.now() / 10000)}`;
+
+  await eventQueue.add("process-event", {
+    projectId,
+    message,
+    file,
+    line,
+    stack,
+    env: input.environment ?? "unknown",
+    url: input.request?.url ?? null,
+    level: input.level,
+    statusCode:
+      input.status_code ??
+      (typeof (input.extra as { status_code?: unknown } | undefined)?.status_code === "number"
+        ? ((input.extra as { status_code: number }).status_code)
+        : null),
+    breadcrumbs: input.breadcrumbs ? JSON.stringify(input.breadcrumbs) : null,
+    sessionId: shouldLinkReplay ? (input.session_id ?? null) : null,
+    createdAt: new Date(createdAtMs).toISOString(),
+    release: input.release ?? null,
+    userId: input.user?.id ?? null,
+    exceptionType: exceptionType ?? undefined,
+    exceptionValue: exceptionValue ?? undefined,
+    platform: input.platform ?? undefined,
+    serverName: input.server_name ?? undefined,
+    tags: input.tags ?? undefined,
+    extra: input.extra ?? undefined,
+    userContext: input.user as any,
+    request: input.request as any,
+    contexts: input.contexts as any,
+    sdk: input.sdk as any,
+    frames,
+    fingerprintVersion: 2,
+    sdkFingerprint: input.fingerprint ?? null,
+    traceId: input.trace_id ?? null,
+    spanId: input.span_id ?? null,
+    debug: (input.profile ?? null) as any,
+  }, { jobId });
+
+  return { queued: true };
+}
+
 export const submitEnvelope = async (c: Context<AppEnv>) => {
   try {
     const raw = await c.req.json();
@@ -169,82 +246,10 @@ export const submitEnvelope = async (c: Context<AppEnv>) => {
       return c.json({ error: "Service temporarily unavailable", code: "SERVICE_UNAVAILABLE" }, 503);
     }
 
-    // ---- Translate envelope → internal flat schema ----
-
-    const frames = extractFrames(input);
-    const topFrame = pickFrame(frames);
-
-    // Resolve file/line: prefer explicit fields implied by the top frame.
-    const file = topFrame?.filename || topFrame?.abs_path || "[unknown]";
-    const line = Math.max(1, topFrame?.lineno ?? 1);
-
-    // Resolve the display message: prefer exception.value when present.
-    const exceptionType =
-      input.exception?.type ??
-      input.exception?.values?.[0]?.type ??
-      undefined;
-    const exceptionValue =
-      input.exception?.value ??
-      input.exception?.values?.[0]?.value ??
-      undefined;
-    const message = exceptionValue || input.message || exceptionType || "Unknown error";
-
-    // Stack string for text search / backwards compat
-    const stack = reconstructStackString(frames, message);
-
-    const createdAtMs = toMilliseconds(input.timestamp);
-
-    // Dedup — same as /event controller
-    const dedupFingerprint = createHash("sha1")
-      .update(`${projectId}|${message}|${file}|${line}`)
-      .digest("hex");
-    const dedupKey = `dedup:env:${projectId}:${dedupFingerprint}`;
-    const isDuplicate = await redis.get(dedupKey);
-    if (isDuplicate) {
+    const result = await enqueueEnvelopeEvent(input, projectId);
+    if (result.deduplicated) {
       return c.json({ success: true, deduplicated: true }, 202);
     }
-    await redis.setex(dedupKey, 10, "1");
-
-    const shouldLinkReplay = ["fatal", "error"].includes(input.level);
-    const jobId = `env-${projectId}-${dedupFingerprint}-${Math.floor(Date.now() / 10000)}`;
-
-    await eventQueue.add("process-event", {
-      projectId,
-      message,
-      file,
-      line,
-      stack,
-      env: input.environment ?? "unknown",
-      url: input.request?.url ?? null,
-      level: input.level,
-      statusCode:
-        input.status_code ??
-        (typeof (input.extra as { status_code?: unknown } | undefined)?.status_code === "number"
-          ? ((input.extra as { status_code: number }).status_code)
-          : null),
-      breadcrumbs: input.breadcrumbs ? JSON.stringify(input.breadcrumbs) : null,
-      sessionId: shouldLinkReplay ? (input.session_id ?? null) : null,
-      createdAt: new Date(createdAtMs).toISOString(),
-      release: input.release ?? null,
-      userId: input.user?.id ?? null,
-      // v2 enriched fields
-      exceptionType: exceptionType ?? undefined,
-      exceptionValue: exceptionValue ?? undefined,
-      platform: input.platform ?? undefined,
-      serverName: input.server_name ?? undefined,
-      tags: input.tags ?? undefined,
-      extra: input.extra ?? undefined,
-      userContext: input.user as any,
-      request: input.request as any,
-      contexts: input.contexts as any,
-      sdk: input.sdk as any,
-      frames,
-      fingerprintVersion: 2,
-      sdkFingerprint: input.fingerprint ?? null,
-      traceId: input.trace_id ?? null,
-      spanId: input.span_id ?? null,
-      debug: (input.profile ?? null) as any,
-    }, { jobId });
 
     incrementQuotaCache(projectId).catch(() => {});
 
