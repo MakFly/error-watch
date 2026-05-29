@@ -20,6 +20,14 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
   error: "text-rose-400",
 };
 
+function statusColor(statusCode: number | null): string {
+  if (statusCode == null) return "text-slate-500";
+  if (statusCode >= 500) return "text-rose-400";
+  if (statusCode >= 400) return "text-amber-400";
+  if (statusCode >= 300) return "text-cyan-400";
+  return "text-emerald-400";
+}
+
 function formatTimestamp(value: Date | string): string {
   const date = new Date(value);
   const pad2 = (n: number) => n.toString().padStart(2, "0");
@@ -143,12 +151,12 @@ export default function LogsPage() {
       env: liveLog.env ?? null,
       release: liveLog.release ?? null,
       source: liveLog.source,
-      url: null,
-      statusCode: null,
-      requestId: null,
-      userId: null,
-      traceId: null,
-      spanId: null,
+      url: liveLog.url ?? null,
+      statusCode: liveLog.statusCode ?? null,
+      requestId: liveLog.requestId ?? null,
+      userId: liveLog.userId ?? null,
+      traceId: liveLog.traceId ?? null,
+      spanId: liveLog.spanId ?? null,
       ingestedAt: new Date(liveLog.timestamp),
     };
 
@@ -298,10 +306,10 @@ export default function LogsPage() {
               <span className={LEVEL_COLORS[entry.level]}>{entry.level}</span>
               <span className="text-cyan-400">{entry.channel}</span>
               <span
-                className="text-slate-500 truncate"
-                title={entry.traceId ?? "no trace"}
+                className={`${statusColor(entry.statusCode)} truncate tabular-nums`}
+                title={entry.statusCode != null ? `HTTP ${entry.statusCode}` : "no HTTP status"}
               >
-                {entry.traceId ? entry.traceId.slice(0, 8) : "—"}
+                {entry.statusCode ?? "—"}
               </span>
               <span className="min-w-0 truncate text-slate-200">{entry.message}</span>
             </div>

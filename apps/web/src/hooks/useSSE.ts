@@ -18,6 +18,12 @@ export type LiveLogEvent = {
       source: "http" | "cli" | "messenger" | "deprecation" | "app";
       env?: string | null;
       release?: string | null;
+      url?: string | null;
+      statusCode?: number | null;
+      requestId?: string | null;
+      userId?: string | null;
+      traceId?: string | null;
+      spanId?: string | null;
     };
     sampled?: boolean;
   };

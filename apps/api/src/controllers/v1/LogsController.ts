@@ -89,6 +89,8 @@ export function buildLogRow(
     : new Date();
 
   const sanitizedMessage = scrubPII(input.message);
+  const sanitizedUrl = input.url ? scrubPII(input.url) : null;
+  const statusCode = coerceStatusCode(input.status_code);
   const entryId = crypto.randomUUID();
 
   return {
@@ -104,8 +106,8 @@ export function buildLogRow(
       env: input.env ?? null,
       release: input.release ?? null,
       source: input.source ?? "app",
-      url: input.url ? scrubPII(input.url) : null,
-      statusCode: coerceStatusCode(input.status_code),
+      url: sanitizedUrl,
+      statusCode,
       requestId: input.request_id ? scrubPII(input.request_id) : null,
       userId: input.user_id ?? null,
       traceId: input.trace_id ?? null,
@@ -120,6 +122,12 @@ export function buildLogRow(
       source: input.source ?? "app",
       env: input.env ?? null,
       release: input.release ?? null,
+      url: sanitizedUrl,
+      statusCode,
+      requestId: input.request_id ? scrubPII(input.request_id) : null,
+      userId: input.user_id ?? null,
+      traceId: input.trace_id ?? null,
+      spanId: input.span_id ?? null,
     },
   };
 }
@@ -145,6 +153,8 @@ export const ingest = async (c: Context) => {
     const sanitizedMessage = scrubPII(input.message);
     const sanitizedContext = scrubPIIValue(input.context ?? null);
     const sanitizedExtra = scrubPIIValue(input.extra ?? null);
+    const sanitizedUrl = input.url ? scrubPII(input.url) : null;
+    const statusCode = coerceStatusCode(input.status_code);
 
     const entryId = crypto.randomUUID();
 
@@ -160,8 +170,8 @@ export const ingest = async (c: Context) => {
       env: input.env ?? null,
       release: input.release ?? null,
       source: input.source ?? "app",
-      url: input.url ? scrubPII(input.url) : null,
-      statusCode: coerceStatusCode(input.status_code),
+      url: sanitizedUrl,
+      statusCode,
       requestId: input.request_id ? scrubPII(input.request_id) : null,
       userId: input.user_id ?? null,
       traceId: input.trace_id ?? null,
@@ -188,6 +198,12 @@ export const ingest = async (c: Context) => {
             source: input.source ?? "app",
             env: input.env ?? null,
             release: input.release ?? null,
+            url: sanitizedUrl,
+            statusCode,
+            requestId: input.request_id ? scrubPII(input.request_id) : null,
+            userId: input.user_id ?? null,
+            traceId: input.trace_id ?? null,
+            spanId: input.span_id ?? null,
           },
           sampled: rateDecision.sampled,
         },
