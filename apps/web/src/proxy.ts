@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import createIntlMiddleware from "next-intl/middleware";
 
+import { getSessionCookieHeader, getSessionToken } from "@/lib/auth-cookies";
 import { getInternalMonitoringApiUrl, getServerEnvFlag, getServerNodeEnv } from "@/lib/config";
 import { routing } from "@/i18n/routing";
 
@@ -70,13 +71,6 @@ function invalidateSessionCache(sessionToken: string) {
   sessionCache.delete(sessionToken);
 }
 
-function getSessionToken(cookieHeader: string): string | null {
-  const match =
-    cookieHeader.match(/better-auth\.session_token=([^;]+)/) ||
-    cookieHeader.match(/__Secure-better-auth\.session_token=([^;]+)/);
-  return match ? match[1] : null;
-}
-
 function invalidateSessionAndRedirect(
   request: NextRequest,
   redirectPath?: string,
@@ -98,6 +92,7 @@ function invalidateSessionAndRedirect(
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const cookieHeader = request.headers.get("cookie") ?? "";
+  const sessionCookieHeader = getSessionCookieHeader(cookieHeader);
   const apiUrl = getInternalMonitoringApiUrl();
   const failOpen = getServerEnvFlag("AUTH_FAIL_OPEN") || getServerNodeEnv() !== "production";
   const selfHosted = getServerEnvFlag("SELF_HOSTED");
@@ -204,7 +199,7 @@ export async function proxy(request: NextRequest) {
       const sessionRes = await fetch(`${apiUrl}/api/auth/get-session`, {
         headers: {
           ...rateLimitForwardHeaders(request),
-          ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+          ...(sessionCookieHeader ? { Cookie: sessionCookieHeader } : {}),
           ...(request.headers.get("origin") ? { Origin: request.headers.get("origin")! } : {}),
         },
         cache: "no-store",

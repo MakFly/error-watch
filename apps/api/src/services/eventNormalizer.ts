@@ -8,6 +8,7 @@ import type { EventJobData } from "../queue/queues";
 // Regex to extract exception type from a legacy message string
 // Matches: "SomeNamespace\SomeException: message" or "TypeError: message"
 const EXCEPTION_TYPE_RE = /^([A-Za-z\\]+[A-Z][a-zA-Z]*Error|[A-Za-z\\]+Exception):/;
+const RESPONSE_STATUS_CODE_RE = /\bStatus Code\s*:\s*([1-5][0-9]{2})\b/i;
 
 /**
  * Shape of a validated legacy (v1) event payload.
@@ -103,6 +104,13 @@ function flattenFingerprint(fp: string | string[] | null | undefined): string | 
   return fp;
 }
 
+export function extractHttpStatusCodeFromMessage(message: string | null | undefined): number | null {
+  const match = message ? RESPONSE_STATUS_CODE_RE.exec(message) : null;
+  if (!match) return null;
+
+  return Number(match[1]);
+}
+
 /**
  * Normalize a legacy v1 event into EventJobData.
  */
@@ -129,7 +137,7 @@ function normalizeLegacy(input: LegacyValidatedEvent, projectId: string): EventJ
     env: input.env,
     url: input.url ?? null,
     level: input.level,
-    statusCode: input.status_code ?? null,
+    statusCode: input.status_code ?? extractHttpStatusCodeFromMessage(input.message),
     breadcrumbs: input.breadcrumbs ? JSON.stringify(input.breadcrumbs) : null,
     sessionId: input.session_id ?? null,
     createdAt: normalizeTimestamp(input.created_at),
@@ -203,6 +211,11 @@ function normalizeEnriched(input: EnrichedValidatedEvent, projectId: string): Ev
   const profileUrl = typeof profile?.url === "string" ? profile.url : null;
   const profileMethod = typeof profile?.method === "string" ? profile.method : null;
   const profileStatus = typeof profile?.status_code === "number" ? profile.status_code : null;
+  const messageStatus = extractHttpStatusCodeFromMessage(message);
+  const isNonErrorLog = !["fatal", "error"].includes(input.level);
+  const resolvedProfileStatus = isNonErrorLog && profileStatus != null && profileStatus >= 400
+    ? null
+    : profileStatus;
 
   return {
     projectId,
@@ -213,7 +226,7 @@ function normalizeEnriched(input: EnrichedValidatedEvent, projectId: string): Ev
     env: input.env,
     url: input.url ?? input.request?.url ?? profileUrl ?? null,
     level: input.level,
-    statusCode: input.status_code ?? profileStatus ?? null,
+    statusCode: input.status_code ?? messageStatus ?? resolvedProfileStatus ?? null,
     breadcrumbs: input.breadcrumbs ? JSON.stringify(input.breadcrumbs) : null,
     sessionId: input.session_id ?? null,
     createdAt: normalizeTimestamp(input.created_at),

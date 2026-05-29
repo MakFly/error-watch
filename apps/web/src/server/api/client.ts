@@ -4,6 +4,7 @@
  */
 
 import { logApiCall, createApiTimer } from '@/lib/api-logger';
+import { buildSessionCookieHeader, getSessionCookieHeader } from '@/lib/auth-cookies';
 import { getInternalMonitoringApiUrl } from '@/lib/config';
 
 export const API_VERSION = "v1";
@@ -33,6 +34,20 @@ async function mergeIncomingForwardingHeaders(headers: Record<string, string>): 
   }
 }
 
+function normalizeCookieHeader(headers: Record<string, string>): void {
+  const cookieHeader = headers["Cookie"] ?? headers["cookie"];
+  if (!cookieHeader) return;
+
+  const sessionCookieHeader = getSessionCookieHeader(cookieHeader);
+  delete headers["cookie"];
+
+  if (sessionCookieHeader) {
+    headers["Cookie"] = sessionCookieHeader;
+  } else {
+    delete headers["Cookie"];
+  }
+}
+
 export async function fetchAPI<T>(endpoint: string, options?: RequestInit & { cookie?: string }): Promise<T> {
   const apiUrl = getApiUrl();
   const apiBase = getApiBase();
@@ -53,20 +68,24 @@ export async function fetchAPI<T>(endpoint: string, options?: RequestInit & { co
 
   // Forward cookie if provided, or try to get from server-side cookies
   if (options?.cookie) {
-    headers["Cookie"] = options.cookie;
+    const sessionCookieHeader = getSessionCookieHeader(options.cookie);
+    if (sessionCookieHeader) {
+      headers["Cookie"] = sessionCookieHeader;
+    }
   } else {
     try {
       const { cookies } = await import("next/headers");
       const cookieStore = await cookies();
-      const allCookies = cookieStore.getAll().map((c: { name: string; value: string }) => `${c.name}=${c.value}`).join("; ");
-      if (allCookies) {
-        headers["Cookie"] = allCookies;
+      const sessionCookieHeader = buildSessionCookieHeader(cookieStore.getAll());
+      if (sessionCookieHeader) {
+        headers["Cookie"] = sessionCookieHeader;
       }
     } catch {
       // Not in a Server Component context, ignore
     }
   }
 
+  normalizeCookieHeader(headers);
   await mergeIncomingForwardingHeaders(headers);
 
   const res = await fetch(url, {

@@ -15,6 +15,7 @@ import { getProjectPlan } from "../../services/subscriptions";
 import { eventQueue } from "../../queue/queues";
 import { isRedisAvailable, redis } from "../../queue/connection";
 import { ProjectSettingsRepository } from "../../repositories/ProjectSettingsRepository";
+import { extractHttpStatusCodeFromMessage } from "../../services/eventNormalizer";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -171,6 +172,7 @@ export async function enqueueEnvelopeEvent(
     level: input.level,
     statusCode:
       input.status_code ??
+      extractHttpStatusCodeFromMessage(message) ??
       (typeof (input.extra as { status_code?: unknown } | undefined)?.status_code === "number"
         ? ((input.extra as { status_code: number }).status_code)
         : null),

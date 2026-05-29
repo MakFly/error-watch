@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+import { buildSessionCookieHeader } from "@/lib/auth-cookies";
 import { getMonitoringApiUrl } from "@/lib/config";
 const API_URL = getMonitoringApiUrl();
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   // Block in production
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Not available in production" }, { status: 403 });
@@ -12,13 +13,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const cookieStore = await cookies();
-    const allCookies = cookieStore.getAll().map((c) => `${c.name}=${c.value}`).join("; ");
+    const sessionCookieHeader = buildSessionCookieHeader(cookieStore.getAll());
 
     const res = await fetch(`${API_URL}/api/v1/dev/reset-tables`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: allCookies,
+        ...(sessionCookieHeader ? { Cookie: sessionCookieHeader } : {}),
       },
     });
 

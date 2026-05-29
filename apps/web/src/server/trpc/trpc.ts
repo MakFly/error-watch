@@ -6,6 +6,7 @@ import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { buildSessionCookieHeader } from "@/lib/auth-cookies";
 import { getInternalMonitoringApiUrl } from "@/lib/config";
 
 /**
@@ -52,9 +53,7 @@ export const createTRPCContext = async (): Promise<Context> => {
     const cookieStore = await cookies();
     const allCookies = cookieStore.getAll();
 
-    const cookieHeader = allCookies
-      .map((c) => `${c.name}=${c.value}`)
-      .join("; ");
+    const cookieHeader = buildSessionCookieHeader(allCookies);
 
     if (cookieHeader) {
       session = await getSessionFromCookie(cookieHeader);
