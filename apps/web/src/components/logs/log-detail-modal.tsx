@@ -48,6 +48,19 @@ function isNonEmpty(value: Record<string, unknown> | null | undefined): value is
   return value != null && Object.keys(value).length > 0;
 }
 
+// Logs forwarded from the API (e.g. the IapiLogger request/response blocks)
+// arrive as multi-line dumps padded with runs of `=`/`-` separator rules.
+// Strip those visual-noise lines and trim the surrounding blank space so the
+// modal shows the actual message instead of a ruler that overflows the panel.
+function cleanLogMessage(message: string): string {
+  return message
+    .split("\n")
+    .filter((line) => !/^\s*[=\-_*]{6,}\s*$/.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function JsonSection({ label, data }: { label: string; data: Record<string, unknown> }) {
   const [open, setOpen] = useState(false);
   return (
@@ -90,9 +103,9 @@ function LogDetailContent({ log }: { log: ApplicationLog }) {
       {/* Message */}
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Message</p>
-        <p className="whitespace-pre-wrap break-words font-mono text-sm text-foreground leading-5">
-          {log.message}
-        </p>
+        <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 font-mono text-sm leading-5 text-foreground">
+          {cleanLogMessage(log.message)}
+        </pre>
       </div>
 
       {/* Metadata */}
