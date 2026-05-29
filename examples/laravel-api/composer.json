@@ -5,12 +5,9 @@
     "description": "ErrorWatch Laravel API REST example — demonstrates ErrorWatch SDK integration.",
     "keywords": ["laravel", "errorwatch", "example", "api"],
     "license": "MIT",
-    "repositories": [
-        { "type": "path", "url": "../../packages/sdk-php" }
-    ],
     "require": {
         "php": "^8.2",
-        "errorwatch/sdk-php": "*",
+        "errorwatch/sdk-php": "^2.9",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1"
@@ -78,6 +75,9 @@
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
+        "platform": {
+            "php": "8.2.0"
+        },
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
