@@ -1,11 +1,15 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish (e.g. v0.24.2)'
+        required: true
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag }}
   cancel-in-progress: false
 
 permissions:
@@ -27,83 +31,42 @@ jobs:
       - name: Fetch tags
         run: git fetch --force --tags origin
 
-      - name: Compute next version
+      - name: Validate release tag
         id: version
         shell: bash
         run: |
           set -euo pipefail
 
-          latest_tag="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
+          tag="${{ inputs.tag }}"
 
-          if [ -n "$latest_tag" ]; then
-            commit_count="$(git rev-list --count "${latest_tag}..HEAD")"
-            if [ "$commit_count" -eq 0 ]; then
-              echo "should_release=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            range="${latest_tag}..HEAD"
-          else
-            range="HEAD"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must match vX.Y.Z, got: $tag" >&2
+            exit 1
           fi
 
-          subjects="$(git log --format='%s' $range)"
-          bodies="$(git log --format='%b' $range)"
-          bump="patch"
-
-          if printf '%s\n%s\n' "$subjects" "$bodies" | grep -Eq 'BREAKING CHANGE'; then
-            bump="major"
-          elif printf '%s\n' "$subjects" | grep -Eq '^[^:]+!:'; then
-            bump="major"
-          elif printf '%s\n' "$subjects" | grep -Eq '^feat(\(.+\))?:'; then
-            bump="minor"
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Release tag does not exist: $tag" >&2
+            echo "Create it explicitly first, for example: git tag $tag && git push origin $tag" >&2
+            exit 1
           fi
 
-          if [ -n "$latest_tag" ]; then
-            current="${latest_tag#v}"
-          else
-            current="0.0.0"
-          fi
-
-          IFS='.' read -r major minor patch <<< "$current"
-
-          case "$bump" in
-            major)
-              major=$((major + 1))
-              minor=0
-              patch=0
-              ;;
-            minor)
-              minor=$((minor + 1))
-              patch=0
-              ;;
-            patch)
-              patch=$((patch + 1))
-              ;;
-          esac
-
-          echo "should_release=true" >> "$GITHUB_OUTPUT"
-          echo "version=v${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
-          echo "previous_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
-          echo "bump=${bump}" >> "$GITHUB_OUTPUT"
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Create release
-        if: steps.version.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ steps.version.outputs.version }}" \
-            --target "${GITHUB_SHA}" \
+            --target "${{ steps.version.outputs.version }}" \
             --title "${{ steps.version.outputs.version }}" \
             --generate-notes \
             --latest
 
     outputs:
-      should_release: ${{ steps.version.outputs.should_release }}
       version: ${{ steps.version.outputs.version }}
 
   docker:
     needs: release
-    if: needs.release.outputs.should_release == 'true'
     uses: ./.github/workflows/docker-publish.yml
     with:
       tag: ${{ needs.release.outputs.version }}

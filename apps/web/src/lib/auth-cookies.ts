@@ -35,8 +35,11 @@ function serializeSessionCookie(name: SessionCookieName, value: string): string 
 
 export function buildSessionCookieHeader(cookies: Iterable<CookieLike>): string {
   return Array.from(cookies)
-    .filter((cookie) => isSessionCookieName(cookie.name))
-    .map((cookie) => serializeSessionCookie(cookie.name, cookie.value))
+    .flatMap((cookie) =>
+      isSessionCookieName(cookie.name)
+        ? [serializeSessionCookie(cookie.name, cookie.value)]
+        : []
+    )
     .join("; ");
 }
 
