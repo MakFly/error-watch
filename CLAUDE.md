@@ -269,6 +269,20 @@ make clean           # Clean build artifacts
 
 ## Docker & Deployment
 
+### Release Tag Rules
+
+- A regular `git commit` + `git push` does not create a Docker release.
+- Never create or push a `vX.Y.Z` release tag implicitly after a commit/push.
+- Create a release tag only when the user explicitly asks for it.
+- Before proposing or creating a release tag, check remote tags:
+  ```bash
+  git ls-remote --tags --refs origin 'v*' | awk '{print $2}' | sed 's#refs/tags/##' | sort -V | tail -5
+  ```
+- If the latest tag is `vX.Y.Z`:
+  - patch release = `vX.Y.(Z+1)`
+  - minor release = `vX.(Y+1).0`
+- Pushing a `v*` tag triggers the GitHub Actions Docker publish workflow.
+
 ### Docker Images
 
 Images are published to GHCR on each release tag (`v*`):

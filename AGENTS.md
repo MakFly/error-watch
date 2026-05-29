@@ -4,6 +4,20 @@
 
 **Pour déployer une nouvelle version des images Docker (api + web) :**
 
+### Règles agent / workflow
+
+- Un `git commit` + `git push` ne crée pas de release Docker.
+- Ne jamais créer ni pousser de tag `vX.Y.Z` implicitement après un commit/push.
+- Créer un tag release seulement si l'utilisateur le demande explicitement.
+- Avant de proposer ou créer un tag, vérifier les tags distants :
+  ```bash
+  git ls-remote --tags --refs origin 'v*' | awk '{print $2}' | sed 's#refs/tags/##' | sort -V | tail -5
+  ```
+- Si le dernier tag est `vX.Y.Z` :
+  - patch release = `vX.Y.(Z+1)`
+  - minor release = `vX.(Y+1).0`
+- Le workflow GitHub Actions Docker ne se déclenche que quand un tag `v*` est poussé.
+
 1. **Créer un tag de release** :
    ```bash
    # Bump patch version & git tag (manuel)
