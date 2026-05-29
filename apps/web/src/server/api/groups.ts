@@ -16,7 +16,10 @@ export const getAll = async (filters?: GroupsFilter): Promise<GroupsResponse> =>
   if (filters?.search) params.set("search", filters.search);
   if (filters?.level) params.set("level", filters.level);
   if (filters?.levels && filters.levels.length > 0) params.set("levels", filters.levels.join(","));
+  // The API reads a single `httpStatus` param and detects exact code vs family
+  // ("4xx"/"5xx") server-side, so the family rides the same query key.
   if (filters?.httpStatus) params.set("httpStatus", String(filters.httpStatus));
+  else if (filters?.httpStatusFamily) params.set("httpStatus", filters.httpStatusFamily);
   if (filters?.status) params.set("status", filters.status);
   if (filters?.sort) params.set("sort", filters.sort);
   if (filters?.page) params.set("page", String(filters.page));

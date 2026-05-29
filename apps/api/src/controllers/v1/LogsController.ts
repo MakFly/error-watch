@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, lt } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lt, lte } from "drizzle-orm";
 import type { Context } from "hono";
 import { z } from "zod";
 import { db } from "../../db/connection";
@@ -8,6 +8,7 @@ import { redis } from "../../queue/connection";
 import { verifyProjectAccess } from "../../services/project-access";
 import { scrubPII, scrubPIIValue } from "../../services/scrubber";
 import { publishEvent } from "../../sse/publisher";
+import { coerceStatusCode, parseStatusCodeFilter } from "../../utils/status-code";
 
 const LEVELS = ["debug", "info", "warning", "error"] as const;
 const SOURCES = ["http", "cli", "messenger", "deprecation", "app"] as const;
@@ -23,6 +24,9 @@ export const logsIngestSchema = z.object({
   release: z.string().max(200).optional().nullable(),
   source: z.enum(SOURCES).optional(),
   url: z.string().max(2000).optional().nullable(),
+  // HTTP status for request/response trace logs. Accepts a number or a numeric
+  // string from SDKs; coerced + range-guarded at insert time (garbage → null).
+  status_code: z.union([z.number(), z.string()]).optional().nullable(),
   request_id: z.string().max(200).optional().nullable(),
   user_id: z.string().max(200).optional().nullable(),
   // Distributed tracing correlation (W3C traceparent)
@@ -37,6 +41,10 @@ const tailQuerySchema = z.object({
   level: z.enum(LEVELS).optional(),
   channel: z.string().max(100).optional(),
   search: z.string().max(200).optional(),
+  // Exact code ("422") or family ("4xx"/"5xx"); validated by parseStatusCodeFilter.
+  status_code: z.string().max(4).optional(),
+  // Substring match against the (scrubbed) request URL.
+  url: z.string().max(2000).optional(),
 });
 
 const RATE_LIMIT_SOFT = parseInt(process.env.LOGS_INGEST_SOFT_LIMIT_PER_SEC || "120", 10);
@@ -97,6 +105,7 @@ export function buildLogRow(
       release: input.release ?? null,
       source: input.source ?? "app",
       url: input.url ? scrubPII(input.url) : null,
+      statusCode: coerceStatusCode(input.status_code),
       requestId: input.request_id ? scrubPII(input.request_id) : null,
       userId: input.user_id ?? null,
       traceId: input.trace_id ?? null,
@@ -152,6 +161,7 @@ export const ingest = async (c: Context) => {
       release: input.release ?? null,
       source: input.source ?? "app",
       url: input.url ? scrubPII(input.url) : null,
+      statusCode: coerceStatusCode(input.status_code),
       requestId: input.request_id ? scrubPII(input.request_id) : null,
       userId: input.user_id ?? null,
       traceId: input.trace_id ?? null,
@@ -221,6 +231,8 @@ export const tail = async (c: Context) => {
       level: c.req.query("level"),
       channel: c.req.query("channel"),
       search: c.req.query("search"),
+      status_code: c.req.query("status_code"),
+      url: c.req.query("url"),
     });
 
     const hasAccess = await verifyProjectAccess(queryInput.projectId, userId);
@@ -243,6 +255,23 @@ export const tail = async (c: Context) => {
     }
     if (queryInput.search?.trim()) {
       conditions.push(ilike(applicationLogs.message, `%${queryInput.search}%`));
+    }
+
+    // HTTP status filter: exact code or family ("4xx"/"5xx" → range). NULL
+    // status_code rows (CLI/app logs without an HTTP context) never match an
+    // active status filter, which is the intended behaviour.
+    const statusFilter = parseStatusCodeFilter(queryInput.status_code);
+    if (statusFilter) {
+      if (statusFilter.kind === "exact") {
+        conditions.push(eq(applicationLogs.statusCode, statusFilter.code));
+      } else {
+        conditions.push(gte(applicationLogs.statusCode, statusFilter.min));
+        conditions.push(lte(applicationLogs.statusCode, statusFilter.max));
+      }
+    }
+
+    if (queryInput.url?.trim()) {
+      conditions.push(ilike(applicationLogs.url, `%${queryInput.url}%`));
     }
 
     const rows = await db

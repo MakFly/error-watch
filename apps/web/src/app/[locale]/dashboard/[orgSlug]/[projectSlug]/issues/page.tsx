@@ -70,8 +70,14 @@ export default function IssuesPage() {
     return { level: filters.level as "fatal" | "error" | "warning" | "info" | "debug" };
   }, [filters.level]);
 
+  // The HTTP status input accepts an exact 3-digit code ("422") or a family
+  // token ("4xx"/"5xx"). Families route to httpStatusFamily (range match).
+  const httpStatusFamilyMatch = /^([1-5])xx$/i.exec(filters.httpStatus.trim());
+  const httpStatusFamily = httpStatusFamilyMatch
+    ? (`${httpStatusFamilyMatch[1]}xx` as "1xx" | "2xx" | "3xx" | "4xx" | "5xx")
+    : undefined;
   const parsedHttpStatus =
-    filters.httpStatus.length === 3 ? Number(filters.httpStatus) : undefined;
+    !httpStatusFamily && filters.httpStatus.length === 3 ? Number(filters.httpStatus) : undefined;
   const httpStatus =
     parsedHttpStatus && parsedHttpStatus >= 100 && parsedHttpStatus <= 599
       ? parsedHttpStatus
@@ -85,6 +91,7 @@ export default function IssuesPage() {
     page,
     limit: 25,
     httpStatus,
+    httpStatusFamily,
     // 'unresolved' is the API default, but we pass it explicitly so the
     // hasActiveFilters comparison below doesn't need a magic value.
     status: filters.status,

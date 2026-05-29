@@ -163,6 +163,7 @@ export const applicationLogs = pgTable("application_logs", {
   release: text("release"),
   source: text("source").notNull().default("app"), // http, cli, messenger, deprecation, app
   url: text("url"),
+  statusCode: integer("status_code"), // HTTP response status for request/trace logs (100-599), nullable
   requestId: text("request_id"),
   userId: text("user_id"),
   // Distributed tracing correlation
@@ -174,6 +175,7 @@ export const applicationLogs = pgTable("application_logs", {
   projectLevelCreatedIdx: index("idx_application_logs_project_level_created").on(table.projectId, table.level, table.createdAt),
   projectChannelCreatedIdx: index("idx_application_logs_project_channel_created").on(table.projectId, table.channel, table.createdAt),
   traceIdx: index("idx_application_logs_trace_id").on(table.traceId),
+  projectStatusCreatedIdx: index("idx_application_logs_project_status_created").on(table.projectId, table.statusCode, table.createdAt),
 }));
 
 // ============================================

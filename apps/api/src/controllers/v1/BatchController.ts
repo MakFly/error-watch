@@ -21,6 +21,7 @@ import { publishEvent } from "../../sse/publisher";
 import { envelopeSchema, enqueueEnvelopeEvent } from "./EnvelopeController";
 import { logsIngestSchema, buildLogRow } from "./LogsController";
 import { transactionPayloadSchema, persistTransaction } from "./PerformanceController";
+import { summarizeRejections } from "../../utils/batch";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -61,6 +62,10 @@ export const submitBatch = async (c: Context<AppEnv>) => {
 
     const accepted = { events: 0, logs: 0, transactions: 0 };
     const rejected: Array<{ index: number; type: string; reason: string }> = [];
+    // Cheap, payload-free detail for the FIRST reject only — surfaced in the
+    // aggregate warn log so "everything is dropping" is diagnosable without
+    // logging per-item or leaking telemetry bodies.
+    let firstRejectDetail: string | null = null;
 
     const logRows: Array<typeof applicationLogs.$inferInsert> = [];
     const logSse: Array<Record<string, unknown>> = [];
@@ -100,13 +105,26 @@ export const submitBatch = async (c: Context<AppEnv>) => {
           type: item.type,
           reason: itemErr instanceof z.ZodError ? "validation_error" : "processing_error",
         });
-        if (!(itemErr instanceof z.ZodError)) {
-          logger.warn("Batch item failed", {
-            type: item.type,
-            error: itemErr instanceof Error ? itemErr.message : "Unknown",
-          });
+        if (firstRejectDetail === null) {
+          // Truncate to keep the log line cheap and avoid leaking payloads.
+          const detail = itemErr instanceof z.ZodError
+            ? itemErr.issues.map((iss) => `${iss.path.join(".")}: ${iss.message}`).join("; ")
+            : itemErr instanceof Error ? itemErr.message : "Unknown";
+          firstRejectDetail = detail.slice(0, 200);
         }
       }
+    }
+
+    // Aggregate every rejected item (including ZodErrors) at warn level so
+    // silent drops are observable. Counts + first reason, never payloads.
+    if (rejected.length > 0) {
+      const summary = summarizeRejections(rejected);
+      logger.warn("Batch items rejected", {
+        projectId,
+        ...summary,
+        firstDetail: firstRejectDetail,
+        total: input.items.length,
+      });
     }
 
     // Flush buffered logs in a single batch insert.
@@ -134,7 +152,19 @@ export const submitBatch = async (c: Context<AppEnv>) => {
       }
     }
 
-    return c.json({ success: true, accepted, rejected: rejected.length, errors: isProduction ? undefined : rejected }, 202);
+    // In production we expose a compact reason summary (counts only, no item
+    // payloads) instead of hiding rejects entirely; dev gets the full per-item
+    // detail for debugging.
+    return c.json(
+      {
+        success: true,
+        accepted,
+        rejected: rejected.length,
+        rejectedSummary: rejected.length > 0 ? summarizeRejections(rejected).byReason : undefined,
+        errors: isProduction ? undefined : rejected,
+      },
+      202,
+    );
   } catch (e) {
     if (e instanceof z.ZodError) {
       logger.warn("Invalid batch input", {

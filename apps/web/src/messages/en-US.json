@@ -529,6 +529,10 @@
     "allLevels": "All levels",
     "allChannels": "All channels",
     "searchMessage": "Search message",
+    "statusCode": "Status (e.g. 422, 5xx)",
+    "url": "URL contains",
+    "loadMore": "Load more",
+    "loadingMore": "Loading...",
     "loadingLogs": "Loading logs...",
     "noLogs": "No logs in current filter."
   },

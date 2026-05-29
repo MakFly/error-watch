@@ -14,6 +14,7 @@ interface GroupsFilter {
   level?: "fatal" | "error" | "warning" | "info" | "debug";
   levels?: string[];
   httpStatus?: number;
+  httpStatusFamily?: "1xx" | "2xx" | "3xx" | "4xx" | "5xx";
   // Defaults to 'unresolved' server-side when omitted.
   status?: "unresolved" | "resolved" | "all";
   sort?: "lastSeen" | "firstSeen" | "count";
@@ -235,6 +236,8 @@ export const useLogsTail = (
     level?: "debug" | "info" | "warning" | "error";
     channel?: string;
     search?: string;
+    statusCode?: string;
+    url?: string;
     enabled?: boolean;
   }
 ) => {
@@ -246,6 +249,8 @@ export const useLogsTail = (
       level: options?.level,
       channel: options?.channel,
       search: options?.search,
+      statusCode: options?.statusCode,
+      url: options?.url,
     },
     {
       enabled: options?.enabled ?? !!projectId,

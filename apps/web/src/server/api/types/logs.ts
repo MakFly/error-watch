@@ -16,6 +16,7 @@ export type ApplicationLog = {
   url: string | null;
   requestId: string | null;
   userId: string | null;
+  statusCode: number | null;
   // Distributed tracing correlation (W3C traceparent)
   traceId: string | null;
   spanId: string | null;
@@ -35,4 +36,8 @@ export type LogsTailFilter = {
   level?: LogLevel;
   channel?: string;
   search?: string;
+  // Exact HTTP code ("422") or family ("4xx"/"5xx")
+  statusCode?: string;
+  // Substring match against the request URL
+  url?: string;
 };

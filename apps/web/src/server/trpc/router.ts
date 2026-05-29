@@ -74,6 +74,7 @@ const groupsRouter = router({
         level: z.enum(["fatal", "error", "warning", "info", "debug"]).optional(),
         levels: z.array(z.string()).optional(),
         httpStatus: z.number().int().min(100).max(599).optional(),
+        httpStatusFamily: z.enum(["1xx", "2xx", "3xx", "4xx", "5xx"]).optional(),
         status: z.enum(["unresolved", "resolved", "all"]).optional(),
         sort: z.enum(["lastSeen", "firstSeen", "count"]).optional(),
         page: z.number().int().positive().optional(),
@@ -768,6 +769,8 @@ const logsRouter = router({
       level: z.enum(["debug", "info", "warning", "error"]).optional(),
       channel: z.string().max(100).optional(),
       search: z.string().max(200).optional(),
+      statusCode: z.string().max(4).optional(),
+      url: z.string().max(2000).optional(),
     }))
     .query(async ({ input }) => {
       return api.logs.tail(input);
