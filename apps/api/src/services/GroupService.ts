@@ -7,7 +7,7 @@ import logger from "../logger";
 
 
 export const GroupService = {
-  getAll: async (filters?: { dateRange?: string; env?: string; search?: string; level?: string; levels?: string[]; httpStatus?: number; status?: "unresolved" | "resolved" | "all"; sort?: string; page?: number; limit?: number }, projectId?: string) => {
+  getAll: async (filters?: { dateRange?: string; env?: string; search?: string; level?: string; levels?: string[]; httpStatus?: number; httpStatusFamily?: "1xx" | "2xx" | "3xx" | "4xx" | "5xx"; status?: "unresolved" | "resolved" | "all"; sort?: string; page?: number; limit?: number }, projectId?: string) => {
     logger.debug("Fetching error groups", { filters, projectId });
     return await GroupRepository.findAll(filters, projectId);
   },

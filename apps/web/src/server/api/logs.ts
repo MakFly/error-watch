@@ -9,6 +9,8 @@ export const tail = async (filters: LogsTailFilter): Promise<LogsTailResponse> =
   if (filters.level) params.set("level", filters.level);
   if (filters.channel) params.set("channel", filters.channel);
   if (filters.search) params.set("search", filters.search);
+  if (filters.statusCode) params.set("status_code", filters.statusCode);
+  if (filters.url) params.set("url", filters.url);
 
   return fetchAPI<LogsTailResponse>(`/logs/tail?${params.toString()}`);
 };

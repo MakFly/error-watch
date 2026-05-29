@@ -529,6 +529,10 @@
     "allLevels": "Tous les niveaux",
     "allChannels": "Tous les canaux",
     "searchMessage": "Rechercher un message",
+    "statusCode": "Statut (ex. 422, 5xx)",
+    "url": "URL contient",
+    "loadMore": "Charger plus",
+    "loadingMore": "Chargement...",
     "loadingLogs": "Chargement des journaux...",
     "noLogs": "Aucun journal pour le filtre actuel."
   },

@@ -67,7 +67,7 @@ export const GroupRepository = {
    * Optimized findAll using single query with LEFT JOIN for replay data
    * Replaces 3 separate queries (groups + replayCounts + latestReplays) with 1
    */
-  findAll: async (filters?: { dateRange?: string; env?: string; search?: string; level?: string; levels?: string[]; httpStatus?: number; status?: "unresolved" | "resolved" | "all"; sort?: string; page?: number; limit?: number }, projectId?: string) => {
+  findAll: async (filters?: { dateRange?: string; env?: string; search?: string; level?: string; levels?: string[]; httpStatus?: number; httpStatusFamily?: "1xx" | "2xx" | "3xx" | "4xx" | "5xx"; status?: "unresolved" | "resolved" | "all"; sort?: string; page?: number; limit?: number }, projectId?: string) => {
     const startDate = parseDateRange(filters?.dateRange);
     const page = filters?.page || 1;
     const limit = filters?.limit || 50;
@@ -92,10 +92,14 @@ export const GroupRepository = {
     }
 
     if (filters?.search) {
+      // Search spans message, file and the request URL so users can find an
+      // issue by its endpoint (e.g. "/api/users"). url is nullable — ilike on
+      // NULL yields NULL (not matched), which is the intended behaviour.
       conditions.push(
         or(
           ilike(errorGroups.message, `%${filters.search}%`),
-          ilike(errorGroups.file, `%${filters.search}%`)
+          ilike(errorGroups.file, `%${filters.search}%`),
+          ilike(errorGroups.url, `%${filters.search}%`)
         )
       );
     }
@@ -158,6 +162,24 @@ export const GroupRepository = {
       } else {
         conditions.push(effectiveStatusMatches);
       }
+    } else if (filters?.httpStatusFamily) {
+      // Status family ("4xx"/"5xx" …) → inclusive range match against the same
+      // effective-status fallback chain used by the exact filter, so families
+      // stay in sync with the HTTP column the user sees. NULL effective status
+      // never matches a family filter (intended: non-HTTP issues are excluded).
+      const base = Number(filters.httpStatusFamily.charAt(0)) * 100;
+      conditions.push(sql`
+        COALESCE(
+          ${errorGroups.statusCode},
+          (
+            SELECT ${effectiveEventStatusCodeSql}
+            FROM error_events le
+            WHERE le.fingerprint = ${errorGroups.fingerprint}
+            ORDER BY le.created_at DESC
+            LIMIT 1
+          )
+        ) BETWEEN ${base} AND ${base + 99}
+      `);
     }
 
     // Environment filter - use subquery with EXISTS instead of IN for better performance
@@ -173,7 +195,7 @@ export const GroupRepository = {
         )
         .groupBy(errorEvents.fingerprint)
         .as("env_events");
-      
+
       conditions.push(sql`${errorGroups.fingerprint} IN (SELECT fingerprint FROM ${envSubquery})`);
     }
 
@@ -340,7 +362,8 @@ export const GroupRepository = {
       conditions.push(
         or(
           ilike(errorGroups.message, `%${filters.search}%`),
-          ilike(errorGroups.file, `%${filters.search}%`)
+          ilike(errorGroups.file, `%${filters.search}%`),
+          ilike(errorGroups.url, `%${filters.search}%`)
         )
       );
     }

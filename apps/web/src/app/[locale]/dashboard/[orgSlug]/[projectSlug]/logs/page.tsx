@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useCurrentProject } from "@/contexts/ProjectContext";
 import { useLogsTail } from "@/lib/trpc/hooks";
+import { trpc } from "@/lib/trpc/client";
+import { useDebounce } from "@/hooks/useDebounce";
 import type { ApplicationLog, LogLevel } from "@/server/api";
 import type { LiveLogEvent } from "@/hooks/useSSE";
 import { useSSEStatus } from "@/components/sse-provider";
@@ -34,32 +36,80 @@ export default function LogsPage() {
   const [level, setLevel] = useState<LogLevel | "all">("all");
   const [channel, setChannel] = useState("");
   const [search, setSearch] = useState("");
+  const [statusCode, setStatusCode] = useState("");
+  const [url, setUrl] = useState("");
   const [paused, setPaused] = useState(false);
   const [liveEntries, setLiveEntries] = useState<ApplicationLog[]>([]);
+  const [olderEntries, setOlderEntries] = useState<ApplicationLog[]>([]);
+  const [loadCursor, setLoadCursor] = useState<string | null>(null);
+  const [loadHasMore, setLoadHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sampledDrops, setSampledDrops] = useState(0);
   const [selectedLog, setSelectedLog] = useState<ApplicationLog | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const terminalRef = useRef<HTMLDivElement | null>(null);
+  const utils = trpc.useUtils();
+
+  const debouncedSearch = useDebounce(search, 300);
+  const debouncedStatusCode = useDebounce(statusCode, 300);
+  const debouncedUrl = useDebounce(url, 300);
 
   const { data, isLoading, refetch } = useLogsTail(currentProjectId || "", {
     limit: 150,
     level: level === "all" ? undefined : level,
     channel: channel || undefined,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
+    statusCode: debouncedStatusCode || undefined,
+    url: debouncedUrl || undefined,
     enabled: !!currentProjectId,
   });
+
+  // The live/head query's pagination cursor is the seed for "load more".
+  // Reset any accumulated older pages whenever the head page (filters) changes.
+  useEffect(() => {
+    setOlderEntries([]);
+    setLoadCursor(data?.nextCursor ?? null);
+    setLoadHasMore(data?.hasMore ?? false);
+  }, [data]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (!currentProjectId || !loadCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const page = await utils.logs.tail.fetch({
+        projectId: currentProjectId,
+        limit: 150,
+        cursor: loadCursor,
+        level: level === "all" ? undefined : level,
+        channel: channel || undefined,
+        search: debouncedSearch || undefined,
+        statusCode: debouncedStatusCode || undefined,
+        url: debouncedUrl || undefined,
+      });
+      setOlderEntries((prev) => [...prev, ...page.items]);
+      setLoadCursor(page.nextCursor);
+      setLoadHasMore(page.hasMore);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentProjectId, loadCursor, isLoadingMore, utils, level, channel, debouncedSearch, debouncedStatusCode, debouncedUrl]);
 
   const mergedEntries = useMemo(() => {
     const byId = new Map<string, ApplicationLog>();
 
     for (const item of liveEntries) byId.set(item.id, item);
     for (const item of data?.items ?? []) byId.set(item.id, item);
+    for (const item of olderEntries) byId.set(item.id, item);
+
+    // Cap grows with how many pages have been loaded so "load more" results
+    // aren't silently dropped, while the live stream stays bounded.
+    const cap = 500 + olderEntries.length;
 
     return Array.from(byId.values())
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 500);
-  }, [liveEntries, data?.items]);
+      .slice(0, cap);
+  }, [liveEntries, data?.items, olderEntries]);
 
   useEffect(() => {
     if (!paused && terminalRef.current) {
@@ -94,6 +144,7 @@ export default function LogsPage() {
       release: liveLog.release ?? null,
       source: liveLog.source,
       url: null,
+      statusCode: null,
       requestId: null,
       userId: null,
       traceId: null,
@@ -160,7 +211,7 @@ export default function LogsPage() {
         </button>
       </PageHeader>
 
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
         <select
           className="rounded border border-border bg-background px-2 py-2 text-sm"
           value={level}
@@ -188,6 +239,27 @@ export default function LogsPage() {
             <option key={item} value={item}>{item}</option>
           ))}
         </select>
+        <input
+          className="rounded border border-border bg-background px-2 py-2 text-sm font-mono tabular-nums"
+          placeholder={t("statusCode")}
+          maxLength={4}
+          value={statusCode}
+          onChange={(e) => {
+            setLiveEntries([]);
+            // Accept digits or an "Nxx" family token; ignore other input.
+            const v = e.target.value.toLowerCase().replace(/[^0-9x]/g, "").slice(0, 4);
+            setStatusCode(v);
+          }}
+        />
+        <input
+          className="rounded border border-border bg-background px-2 py-2 text-sm"
+          placeholder={t("url")}
+          value={url}
+          onChange={(e) => {
+            setLiveEntries([]);
+            setUrl(e.target.value);
+          }}
+        />
         <input
           className="rounded border border-border bg-background px-2 py-2 text-sm md:col-span-2"
           placeholder={t("searchMessage")}
@@ -236,6 +308,19 @@ export default function LogsPage() {
           ))
         )}
       </div>
+
+      {loadHasMore && (
+        <div className="flex justify-center">
+          <button
+            disabled={isLoadingMore}
+            onClick={handleLoadMore}
+            className={`inline-flex items-center gap-1 rounded border border-border px-3 py-1.5 text-xs ${isLoadingMore ? "cursor-not-allowed opacity-60" : "hover:bg-white/5"}`}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoadingMore ? "animate-spin" : ""}`} />
+            {isLoadingMore ? t("loadingMore") : t("loadMore")}
+          </button>
+        </div>
+      )}
 
       <LogDetailModal
         log={selectedLog}

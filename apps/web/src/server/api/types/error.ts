@@ -272,6 +272,8 @@ export type GroupsFilter = {
   level?: "fatal" | "error" | "warning" | "info" | "debug";
   levels?: string[];
   httpStatus?: number;
+  // HTTP status family ("4xx"/"5xx") — range match, alternative to httpStatus.
+  httpStatusFamily?: "1xx" | "2xx" | "3xx" | "4xx" | "5xx";
   // Status filter. Omitting it defaults to 'unresolved' on the API side
   // (resolved issues are hidden by default, Sentry-style).
   status?: "unresolved" | "resolved" | "all";

@@ -165,13 +165,13 @@ export function FiltersRow({
           <Hash className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-pulse-muted" />
           <input
             type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
+            inputMode="text"
             maxLength={3}
             placeholder={t("httpStatus")}
             value={httpStatus || ""}
             onChange={(e) => {
-              const value = e.target.value.replace(/\D/g, "").slice(0, 3);
+              // Accept a 3-digit exact code or an HTTP family token ("4xx"/"5xx").
+              const value = e.target.value.toLowerCase().replace(/[^0-9x]/g, "").slice(0, 3);
               onHttpStatusChange(value);
             }}
             className={cn(

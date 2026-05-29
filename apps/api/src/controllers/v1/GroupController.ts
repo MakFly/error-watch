@@ -13,8 +13,15 @@ export const getAll = async (c: AuthContext) => {
   const level = c.req.query("level") as "fatal" | "error" | "warning" | "info" | "debug" | undefined;
   const levelsRaw = c.req.query("levels");
   const levels = levelsRaw ? levelsRaw.split(",").map((l) => l.trim()).filter(Boolean) : undefined;
+  // `httpStatus` accepts either an exact 3-digit code ("422") or an HTTP family
+  // token ("4xx"/"5xx"). A family routes to httpStatusFamily (range match in
+  // the repository); an exact code routes to httpStatus.
   const httpStatusRaw = c.req.query("httpStatus");
-  const parsedHttpStatus = httpStatusRaw && /^\d{3}$/.test(httpStatusRaw) ? Number(httpStatusRaw) : undefined;
+  const familyMatch = httpStatusRaw ? /^([1-5])xx$/i.exec(httpStatusRaw.trim()) : null;
+  const httpStatusFamily = familyMatch
+    ? (`${familyMatch[1]}xx` as "1xx" | "2xx" | "3xx" | "4xx" | "5xx")
+    : undefined;
+  const parsedHttpStatus = !familyMatch && httpStatusRaw && /^\d{3}$/.test(httpStatusRaw) ? Number(httpStatusRaw) : undefined;
   const httpStatus =
     parsedHttpStatus && parsedHttpStatus >= 100 && parsedHttpStatus <= 599
       ? parsedHttpStatus
@@ -40,8 +47,8 @@ export const getAll = async (c: AuthContext) => {
     }
   }
 
-  logger.debug("GET /api/v1/groups", { env, dateRange, projectId, search, level, levels, httpStatus, status, sort, page, limit });
-  const result = await GroupService.getAll({ env, dateRange, search, level, levels, httpStatus, status, sort, page, limit }, projectId);
+  logger.debug("GET /api/v1/groups", { env, dateRange, projectId, search, level, levels, httpStatus, httpStatusFamily, status, sort, page, limit });
+  const result = await GroupService.getAll({ env, dateRange, search, level, levels, httpStatus, httpStatusFamily, status, sort, page, limit }, projectId);
   return c.json(result);
 };
 
