@@ -14,7 +14,7 @@ import { getProjectPlan } from "../../services/subscriptions";
 import { eventQueue } from "../../queue/queues";
 import { isRedisAvailable, redis } from "../../queue/connection";
 import { ProjectSettingsRepository } from "../../repositories/ProjectSettingsRepository";
-import { normalizeEnvelope } from "../../services/eventNormalizer";
+import { normalizeEnvelope, type EnvelopeInput } from "../../services/eventNormalizer";
 import { previewDedupFingerprint } from "../../services/grouping";
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -100,7 +100,10 @@ export async function enqueueEnvelopeEvent(
   input: z.infer<typeof envelopeSchema>,
   projectId: string,
 ): Promise<{ queued: boolean; deduplicated?: boolean }> {
-  const normalized = normalizeEnvelope(input, projectId);
+  // envelopeSchema infers optional/passthrough frame fields (e.g. filename?), while
+  // EnvelopeInput derives from EnrichedValidatedEvent which requires them; the normalizer
+  // already re-casts frames internally, so narrow here to bridge the validated shape.
+  const normalized = normalizeEnvelope(input as EnvelopeInput, projectId);
 
   const dedupFingerprint = previewDedupFingerprint({
     projectId,
