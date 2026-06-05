@@ -23,6 +23,7 @@ export interface IssueGroup {
   message: string
   /** Sentry-style display title computed at ingest time. Empty for legacy rows; UI falls back to message. */
   title?: string
+  culprit?: string
   file: string
   line: number
   url?: string | null
@@ -70,6 +71,24 @@ function getLevelColor(level: ErrorLevel): string {
   }
 }
 
+/** Tailwind cannot see dynamic `bg-${token}` — map explicitly. */
+function getLevelDotClass(level: ErrorLevel): string {
+  switch (level.toLowerCase()) {
+    case "fatal":
+      return "bg-signal-fatal"
+    case "error":
+      return "bg-signal-error"
+    case "warning":
+      return "bg-signal-warning"
+    case "info":
+      return "bg-signal-info"
+    case "debug":
+      return "bg-signal-debug"
+    default:
+      return "bg-muted-foreground"
+  }
+}
+
 export function createIssuesColumns({
   orgSlug,
   projectSlug,
@@ -85,9 +104,11 @@ export function createIssuesColumns({
         return (
           <div className="flex items-center gap-2">
             <div
-              className={`size-2.5 rounded-full ${
-                isCritical ? "animate-pulse" : ""
-              } bg-${getLevelColor(level)}`}
+              className={cn(
+                "size-2.5 rounded-full",
+                isCritical && "animate-pulse",
+                getLevelDotClass(level),
+              )}
             />
             <Badge variant={getLevelColor(level) as any} className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
               {level}
@@ -123,6 +144,7 @@ export function createIssuesColumns({
         const {
           message,
           title,
+          culprit,
           file,
           line,
           fingerprint,
@@ -190,11 +212,11 @@ export function createIssuesColumns({
                   )}
                 </span>
               </span>
-              {(topFrameLabel || displayFile) && (
+              {(culprit || topFrameLabel || displayFile) && (
                 <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
                   <FileCode2Icon className="size-3 shrink-0" />
                   <span className="truncate font-mono">
-                    {topFrameLabel ?? `${displayFile}:${line}`}
+                    {culprit || topFrameLabel || `${displayFile}:${line}`}
                   </span>
                 </span>
               )}
@@ -261,14 +283,25 @@ export function createIssuesColumns({
         const effectiveStatus = statusCode ?? inferredStatus
         const statusInferred = statusCode == null && inferredStatus != null
 
+        const isLowSeverity =
+          level === "warning" || level === "info" || level === "debug"
+
         const statusBg =
           effectiveStatus == null
             ? "bg-muted/50 text-muted-foreground"
-            : effectiveStatus >= 500
-              ? "bg-red-500/10 text-red-500"
-              : effectiveStatus >= 400
-                ? "bg-amber-500/10 text-amber-500"
-                : "bg-emerald-500/10 text-emerald-500"
+            : isLowSeverity
+              ? "bg-muted/40 text-muted-foreground"
+              : effectiveStatus >= 500
+                ? "bg-red-500/10 text-red-500"
+                : effectiveStatus >= 400
+                  ? "bg-amber-500/10 text-amber-500"
+                  : "bg-emerald-500/10 text-emerald-500"
+
+        const statusTitle = statusInferred
+          ? "Inferred from level (SDK did not send status_code)"
+          : isLowSeverity && effectiveStatus != null
+            ? "HTTP status of the request during capture — not the signal severity"
+            : undefined
 
         return (
           <div className="hidden min-w-0 max-w-[280px] flex-col gap-0.5 md:flex">
@@ -278,10 +311,11 @@ export function createIssuesColumns({
                   className={cn(
                     "rounded-sm px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
                     statusBg,
-                    statusInferred && "italic opacity-80"
+                    statusInferred && "italic opacity-80",
                   )}
-                  title={statusInferred ? "Inferred from level (SDK did not send status_code)" : undefined}
+                  title={statusTitle}
                 >
+                  {isLowSeverity ? "req " : ""}
                   {statusInferred ? `~${effectiveStatus}` : effectiveStatus}
                 </span>
               ) : (

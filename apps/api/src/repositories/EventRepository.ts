@@ -22,6 +22,8 @@ export const EventRepository = {
         userId: errorEvents.userId,
         exceptionType: errorEvents.exceptionType,
         exceptionValue: errorEvents.exceptionValue,
+        mechanism: errorEvents.mechanism,
+        exceptionValues: errorEvents.exceptionValues,
         tags: errorEvents.tags,
         request: errorEvents.request,
         contexts: errorEvents.contexts,

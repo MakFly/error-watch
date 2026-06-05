@@ -1,18 +1,11 @@
 "use client";
 
-import { CheckCircle2, RotateCcw, History } from "lucide-react";
+import { CheckCircle2, RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { useGroupStatusHistory } from "@/lib/trpc/hooks";
 import type { StatusHistoryEntry } from "@/server/api";
-
-function formatRel(date: string | Date): string {
-  const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
+import { useFormatRel } from "./use-format-rel";
 
 /**
  * Audit timeline of resolve/reopen transitions for an issue. Pulled from
@@ -20,7 +13,13 @@ function formatRel(date: string | Date): string {
  * and the event worker writes a system row when a regression auto-reopens
  * a previously resolved group.
  */
-export function StatusHistoryTimeline({ fingerprint }: { fingerprint: string }) {
+export function StatusHistoryTimeline({
+  fingerprint,
+  compact = false,
+}: {
+  fingerprint: string;
+  compact?: boolean;
+}) {
   const t = useTranslations("issueDetail.status");
   const { data: entries, isLoading } = useGroupStatusHistory(fingerprint);
 
@@ -28,12 +27,9 @@ export function StatusHistoryTimeline({ fingerprint }: { fingerprint: string }) 
   if (!entries || entries.length === 0) return null;
 
   return (
-    <section className="border-b border-dashboard-border bg-dashboard-surface px-6 py-5 md:px-10">
-      <header className="mb-4 flex items-center gap-2">
-        <History className="h-4 w-4 text-muted-foreground" />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {t("historyTitle")}
-        </h2>
+    <section className={cn(compact ? "px-4 py-4" : "border-b border-border/60 px-6 py-5 md:px-10")}>
+      <header className="mb-3">
+        <h2 className="text-xs font-medium text-muted-foreground">{t("historyTitle")}</h2>
       </header>
 
       <ol className="relative space-y-3 border-l border-dashboard-border pl-5">
@@ -47,6 +43,7 @@ export function StatusHistoryTimeline({ fingerprint }: { fingerprint: string }) 
 
 function TimelineRow({ entry }: { entry: StatusHistoryEntry }) {
   const t = useTranslations("issueDetail.status");
+  const formatRel = useFormatRel();
   const isResolveTransition = entry.toStatus === "resolved";
   const Icon = isResolveTransition ? CheckCircle2 : RotateCcw;
 
@@ -75,11 +72,9 @@ function TimelineRow({ entry }: { entry: StatusHistoryEntry }) {
         <Icon className="h-3 w-3" />
       </span>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="font-mono text-xs font-semibold uppercase tracking-wider text-foreground">
-          {label}
-        </span>
-        <span className="font-mono text-[11px] text-muted-foreground">{actorLabel}</span>
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground/80">
+        <span className="text-xs font-medium text-foreground">{label}</span>
+        <span className="text-[11px] text-muted-foreground">{actorLabel}</span>
+        <span className="ml-auto text-[11px] text-muted-foreground">
           {formatRel(entry.createdAt)}
         </span>
       </div>

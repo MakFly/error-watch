@@ -24,6 +24,8 @@ export type LiveLogEvent = {
       userId?: string | null;
       traceId?: string | null;
       spanId?: string | null;
+      context?: Record<string, unknown> | null;
+      extra?: Record<string, unknown> | null;
     };
     sampled?: boolean;
   };

@@ -45,7 +45,7 @@ async function processAggregation(job: Job<AggregationJobData>): Promise<Record<
       const aggregateCleanup = await cleanupOldAggregates(12);
       const eventsDeleted = await cleanupOldEvents(30);
       const groupsDeleted = await cleanupOrphanedGroups();
-      const logsDeleted = await cleanupOldApplicationLogs(24);
+      const logsDeleted = await cleanupOldApplicationLogs();
       return {
         type,
         performance: perfCleanup,

@@ -380,7 +380,8 @@
       },
       "tabs": {
         "overview": "Vue d'ensemble",
-        "spans": "Spans"
+        "spans": "Spans",
+        "logs": "Journaux"
       },
       "spanFilter": {
         "all": "Tous"
@@ -534,7 +535,29 @@
     "loadMore": "Charger plus",
     "loadingMore": "Chargement...",
     "loadingLogs": "Chargement des journaux...",
-    "noLogs": "Aucun journal pour le filtre actuel."
+    "noLogs": "Aucun journal pour le filtre actuel.",
+    "traceId": "Trace ID",
+    "userId": "User ID",
+    "attribute": "Attribut (clé:valeur)",
+    "volumeChart": "Volume des journaux",
+    "totalInRange": "{count} journaux sur la période",
+    "noVolumeData": "Aucune donnée de volume pour les filtres actuels",
+    "tabSample": "Échantillon",
+    "tabAggregates": "Agrégats",
+    "aggregateByLevel": "Par niveau",
+    "aggregateByChannel": "Par canal",
+    "aggregateByMessage": "Messages fréquents",
+    "colTimestamp": "Horodatage",
+    "colLevel": "Niveau",
+    "colChannel": "Canal",
+    "colStatus": "Statut",
+    "colMessage": "Message",
+    "colTrace": "Trace",
+    "expandRow": "Développer la ligne",
+    "collapseRow": "Réduire la ligne",
+    "traceFilterHint": "Journaux pour la trace {traceId}…",
+    "openInExplorer": "Ouvrir dans Journaux",
+    "noLogsForTrace": "Aucun journal pour cette trace dans la fenêtre de rétention."
   },
   "marketing": {
     "nav": {
@@ -1191,7 +1214,7 @@
       "sourceQueue": "File d'attente",
       "sourceDeprecation": "Dépréciation",
       "level": "Niveau",
-      "levelActionable": "Actionnables",
+      "levelActionable": "Fatals & erreurs",
       "levelAll": "Tous les niveaux",
       "levelFatal": "Fatal",
       "levelError": "Erreur",
@@ -1229,6 +1252,10 @@
       "toggleError": "Impossible de modifier le statut",
       "unknownUser": "utilisateur inconnu",
       "historyTitle": "Historique",
+      "justNow": "à l'instant",
+      "minutesAgo": "il y a {n} min",
+      "hoursAgo": "il y a {n} h",
+      "daysAgo": "il y a {n} j",
       "historyEmpty": "Aucune transition enregistrée",
       "transitionResolved": "Marqué résolu",
       "transitionReopened": "Rouvert",
@@ -1248,10 +1275,16 @@
     },
     "navigator": {
       "title": "Événements ({count})",
+      "older": "Événement plus ancien",
+      "newer": "Événement plus récent",
+      "position": "{current} / {total}",
       "replay": "rejeu",
       "replays": "rejeux",
       "noReplay": "pas de rejeu",
       "noEvents": "Aucun événement enregistré"
+    },
+    "rail": {
+      "eventContext": "Cet événement"
     },
     "stackTrace": {
       "title": "Trace de pile",
@@ -1265,14 +1298,22 @@
       "vendor": "vendor",
       "frameworkFrames": "{count} cadre framework",
       "frameworkFramesPlural": "{count} cadres framework",
-      "in": "dans"
+      "in": "dans",
+      "noSourceContext": "Contexte source indisponible pour ce cadre."
     },
     "tabs": {
       "stack": "Trace de pile",
       "breadcrumbs": "Fil d'Ariane",
       "request": "Requête",
       "context": "Contexte",
-      "trace": "Trace distribuée"
+      "trace": "Trace distribuée",
+      "profiler": "Profiler HTTP",
+      "logs": "Journaux"
+    },
+    "logs": {
+      "empty": "Aucun journal applicatif corrélé à ce problème pour l'instant.",
+      "summary": "{count} journaux corrélés via les traces liées",
+      "openInExplorer": "Ouvrir dans Journaux"
     },
     "eventTimeline": {
       "title": "Chronologie des événements",
@@ -1385,6 +1426,7 @@
     },
     "header": {
       "issues": "problèmes",
+      "severity": "Sévérité",
       "assign": "Assigner",
       "unassign": "Désassigner"
     }

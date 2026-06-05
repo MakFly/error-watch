@@ -65,7 +65,8 @@ export default function IssuesPage() {
 
   // Compute level filter params
   const levelFilter = useMemo(() => {
-    if (filters.level === "actionable") return { levels: ["fatal", "error", "warning"] };
+    // Actionable = real failures only (not deprecations / log warnings).
+    if (filters.level === "actionable") return { levels: ["fatal", "error"] };
     if (filters.level === "all") return {};
     return { level: filters.level as "fatal" | "error" | "warning" | "info" | "debug" };
   }, [filters.level]);

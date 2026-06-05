@@ -760,20 +760,39 @@ const performanceRouter = router({
 /**
  * Logs router - protected
  */
+const logsFilterInput = z.object({
+  projectId: z.string().uuid(),
+  level: z.enum(["debug", "info", "warning", "error"]).optional(),
+  channel: z.string().max(100).optional(),
+  search: z.string().max(200).optional(),
+  statusCode: z.string().max(4).optional(),
+  url: z.string().max(2000).optional(),
+  traceId: z.string().max(64).optional(),
+  spanId: z.string().max(32).optional(),
+  requestId: z.string().max(200).optional(),
+  userId: z.string().max(200).optional(),
+  env: z.string().max(50).optional(),
+  release: z.string().max(200).optional(),
+  attribute: z.string().max(200).optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
 const logsRouter = router({
   tail: protectedProcedure
-    .input(z.object({
-      projectId: z.string().uuid(),
+    .input(logsFilterInput.extend({
       limit: z.number().int().positive().max(500).optional(),
       cursor: z.string().optional(),
-      level: z.enum(["debug", "info", "warning", "error"]).optional(),
-      channel: z.string().max(100).optional(),
-      search: z.string().max(200).optional(),
-      statusCode: z.string().max(4).optional(),
-      url: z.string().max(2000).optional(),
     }))
     .query(async ({ input }) => {
       return api.logs.tail(input);
+    }),
+  stats: protectedProcedure
+    .input(logsFilterInput.extend({
+      groupBy: z.enum(["level", "channel", "message"]).optional(),
+    }))
+    .query(async ({ input }) => {
+      return api.logs.stats(input);
     }),
 });
 

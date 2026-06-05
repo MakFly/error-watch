@@ -90,19 +90,19 @@ export function FiltersRow({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">{t("allEnvs")}</SelectItem>
-          <SelectItem value="prod">
+          <SelectItem value="production">
             <span className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-signal-fatal" />
               {t("production")}
             </span>
           </SelectItem>
-          <SelectItem value="staging">
+          <SelectItem value="preprod">
             <span className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-signal-warning" />
               {t("staging")}
             </span>
           </SelectItem>
-          <SelectItem value="dev">
+          <SelectItem value="development">
             <span className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-signal-info" />
               {t("development")}

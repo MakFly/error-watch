@@ -62,7 +62,11 @@ export async function cleanupOldNotifications(retentionDays: number = DEFAULT_NO
   return deletedCount;
 }
 
-export async function cleanupOldApplicationLogs(retentionHours: number = 24): Promise<number> {
+const DEFAULT_LOG_RETENTION_DAYS = parseInt(process.env.LOG_RETENTION_DAYS || "7", 10);
+
+export async function cleanupOldApplicationLogs(
+  retentionHours: number = DEFAULT_LOG_RETENTION_DAYS * 24,
+): Promise<number> {
   const cutoffDate = new Date(Date.now() - retentionHours * 60 * 60 * 1000);
 
   logger.info("Starting application logs cleanup", { retentionHours, cutoffDate: cutoffDate.toISOString() });

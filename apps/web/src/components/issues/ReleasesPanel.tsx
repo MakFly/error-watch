@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Package, Tag } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 interface Release {
@@ -32,24 +31,16 @@ export function ReleasesPanel({
   const displayReleases = namedReleases.length > 0 ? namedReleases : releases;
 
   return (
-    <div className={cn("rounded-lg border border-issues-border bg-issues-surface/30 p-4", className)}>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Package className="h-4 w-4 text-pulse-primary" />
-          <h3 className="font-mono text-xs font-semibold uppercase tracking-wider text-foreground">
-            {t("title")}
-          </h3>
-        </div>
+    <div className={cn("rounded-lg border border-border/60 bg-card/40 p-4", className)}>
+      <div className="mb-3">
+        <h3 className="text-xs font-medium text-muted-foreground">{t("title")}</h3>
       </div>
 
       {/* First seen badge */}
       {firstSeenIn && firstSeenIn !== "unknown" && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-pulse-secondary/30 bg-pulse-secondary/10 px-3 py-2">
-          <Tag className="h-3.5 w-3.5 text-pulse-secondary" />
-          <span className="text-xs text-muted-foreground">{t("firstSeenIn")}</span>
-          <span className="font-mono text-xs font-semibold text-pulse-secondary">
-            {firstSeenIn}
-          </span>
+        <div className="mb-3 rounded-md bg-muted/40 px-3 py-2 text-xs">
+          <span className="text-muted-foreground">{t("firstSeenIn")} </span>
+          <span className="font-medium text-foreground">{firstSeenIn}</span>
         </div>
       )}
 
@@ -71,9 +62,9 @@ export function ReleasesPanel({
               </div>
 
               {/* Progress bar */}
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-issues-border">
+              <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
                 <div
-                  className="h-full rounded-full bg-pulse-primary transition-all"
+                  className="h-full rounded-full bg-primary/70 transition-all"
                   style={{
                     width: `${release.percentage}%`,
                     opacity,

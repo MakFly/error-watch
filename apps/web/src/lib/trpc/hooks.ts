@@ -79,6 +79,10 @@ export const useGroupTimeline = (fingerprint: string) => {
   return trpc.groups.getTimeline.useQuery({ fingerprint });
 };
 
+export const useGroupReleases = (fingerprint: string) => {
+  return trpc.groups.getReleases.useQuery({ fingerprint });
+};
+
 export const useStats = () => {
   const { currentProjectId, isLoading: isProjectLoading } = useCurrentProject();
   return trpc.stats.getGlobal.useQuery(
@@ -228,19 +232,27 @@ export const useReplaySessionEvents = (
   });
 };
 
-export const useLogsTail = (
-  projectId: string,
-  options?: {
-    limit?: number;
-    cursor?: string;
-    level?: "debug" | "info" | "warning" | "error";
-    channel?: string;
-    search?: string;
-    statusCode?: string;
-    url?: string;
-    enabled?: boolean;
-  }
-) => {
+export type LogsQueryOptions = {
+  limit?: number;
+  cursor?: string;
+  level?: "debug" | "info" | "warning" | "error";
+  channel?: string;
+  search?: string;
+  statusCode?: string;
+  url?: string;
+  traceId?: string;
+  spanId?: string;
+  requestId?: string;
+  userId?: string;
+  env?: string;
+  release?: string;
+  attribute?: string;
+  from?: string;
+  to?: string;
+  enabled?: boolean;
+};
+
+export const useLogsTail = (projectId: string, options?: LogsQueryOptions) => {
   return trpc.logs.tail.useQuery(
     {
       projectId,
@@ -251,10 +263,49 @@ export const useLogsTail = (
       search: options?.search,
       statusCode: options?.statusCode,
       url: options?.url,
+      traceId: options?.traceId,
+      spanId: options?.spanId,
+      requestId: options?.requestId,
+      userId: options?.userId,
+      env: options?.env,
+      release: options?.release,
+      attribute: options?.attribute,
+      from: options?.from,
+      to: options?.to,
     },
     {
       enabled: options?.enabled ?? !!projectId,
       refetchInterval: 120000,
-    }
+    },
+  );
+};
+
+export const useLogsStats = (
+  projectId: string,
+  options?: LogsQueryOptions & { groupBy?: "level" | "channel" | "message" },
+) => {
+  return trpc.logs.stats.useQuery(
+    {
+      projectId,
+      level: options?.level,
+      channel: options?.channel,
+      search: options?.search,
+      statusCode: options?.statusCode,
+      url: options?.url,
+      traceId: options?.traceId,
+      spanId: options?.spanId,
+      requestId: options?.requestId,
+      userId: options?.userId,
+      env: options?.env,
+      release: options?.release,
+      attribute: options?.attribute,
+      from: options?.from,
+      to: options?.to,
+      groupBy: options?.groupBy,
+    },
+    {
+      enabled: options?.enabled ?? !!projectId,
+      refetchInterval: 120000,
+    },
   );
 };

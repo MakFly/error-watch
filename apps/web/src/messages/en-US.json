@@ -380,7 +380,8 @@
       },
       "tabs": {
         "overview": "Overview",
-        "spans": "Spans"
+        "spans": "Spans",
+        "logs": "Logs"
       },
       "spanFilter": {
         "all": "All"
@@ -534,7 +535,29 @@
     "loadMore": "Load more",
     "loadingMore": "Loading...",
     "loadingLogs": "Loading logs...",
-    "noLogs": "No logs in current filter."
+    "noLogs": "No logs in current filter.",
+    "traceId": "Trace ID",
+    "userId": "User ID",
+    "attribute": "Attribute (key:value)",
+    "volumeChart": "Log volume",
+    "totalInRange": "{count} logs in range",
+    "noVolumeData": "No volume data for current filters",
+    "tabSample": "Sample",
+    "tabAggregates": "Aggregates",
+    "aggregateByLevel": "By level",
+    "aggregateByChannel": "By channel",
+    "aggregateByMessage": "Top messages",
+    "colTimestamp": "Timestamp",
+    "colLevel": "Level",
+    "colChannel": "Channel",
+    "colStatus": "Status",
+    "colMessage": "Message",
+    "colTrace": "Trace",
+    "expandRow": "Expand row",
+    "collapseRow": "Collapse row",
+    "traceFilterHint": "Logs for trace {traceId}…",
+    "openInExplorer": "Open in Logs",
+    "noLogsForTrace": "No logs for this trace in the current retention window."
   },
   "settings": {
     "tabs": {
@@ -1009,7 +1032,7 @@
       "sourceQueue": "Queue",
       "sourceDeprecation": "Deprecation",
       "level": "Level",
-      "levelActionable": "Actionable",
+      "levelActionable": "Fatal & error",
       "levelAll": "All levels",
       "levelFatal": "Fatal",
       "levelError": "Error",
@@ -1047,6 +1070,10 @@
       "toggleError": "Could not update issue status",
       "unknownUser": "unknown user",
       "historyTitle": "History",
+      "justNow": "just now",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago",
       "historyEmpty": "No transitions recorded yet",
       "transitionResolved": "Marked resolved",
       "transitionReopened": "Reopened",
@@ -1066,10 +1093,16 @@
     },
     "navigator": {
       "title": "Events ({count})",
+      "older": "Older event",
+      "newer": "Newer event",
+      "position": "{current} / {total}",
       "replay": "replay",
       "replays": "replays",
       "noReplay": "no replay",
       "noEvents": "No events recorded"
+    },
+    "rail": {
+      "eventContext": "This event"
     },
     "stackTrace": {
       "title": "Stack Trace",
@@ -1083,14 +1116,22 @@
       "vendor": "vendor",
       "frameworkFrames": "{count} framework frame",
       "frameworkFramesPlural": "{count} framework frames",
-      "in": "in"
+      "in": "in",
+      "noSourceContext": "Source context not available for this frame."
     },
     "tabs": {
       "stack": "Stack Trace",
       "breadcrumbs": "Breadcrumbs",
       "request": "Request",
       "context": "Context",
-      "trace": "Distributed trace"
+      "trace": "Distributed trace",
+      "profiler": "HTTP Profiler",
+      "logs": "Logs"
+    },
+    "logs": {
+      "empty": "No application logs correlated with this issue yet.",
+      "summary": "{count} correlated logs from linked traces",
+      "openInExplorer": "Open in Logs"
     },
     "eventTimeline": {
       "title": "Event Timeline",
@@ -1203,6 +1244,7 @@
     },
     "header": {
       "issues": "issues",
+      "severity": "Severity",
       "assign": "Assign",
       "unassign": "Unassign"
     }

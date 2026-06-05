@@ -41,6 +41,9 @@ export const errorGroups = pgTable("error_groups", {
   // FK kept loose (text) to mirror the assignedTo convention; set to NULL when
   // the resolver's user account is deleted so the row survives.
   resolvedBy: text("resolved_by"),
+  // Sentry-style culprit string (e.g. "DocumentService.php in getUserInputValue").
+  culprit: text("culprit").notNull().default(""),
+  groupingConfigVersion: integer("grouping_config_version").notNull().default(1),
 }, (table) => ({
   projectLastSeenIdx: index("idx_error_groups_project_last_seen").on(table.projectId, table.lastSeen),
   mergedIntoIdx: index("idx_error_groups_merged_into").on(table.mergedInto),
@@ -124,6 +127,11 @@ export const errorEvents = pgTable("error_events", {
   // queries, cache, mail, events, views, gates, http_client, logs, jobs, memory,
   // timing, request, route. Null when SDK profiler is disabled or unsupported.
   debug: jsonb("debug"),
+  // How the event was captured (Sentry mechanism): { type, handled, source }
+  mechanism: jsonb("mechanism"),
+  // Chained exceptions (Sentry exception.values[])
+  exceptionValues: jsonb("exception_values"),
+  regroupedAt: timestamp("regrouped_at", { withTimezone: true }),
 }, (table) => ({
   // Performance indexes for common queries
   projectCreatedIdx: index("idx_error_events_project_created").on(table.projectId, table.createdAt),
@@ -273,6 +281,7 @@ export const projects = pgTable("projects", {
   slug: text("slug").notNull().unique(),
   environment: text("environment"),
   platform: text("platform").notNull().default("nodejs"), // symfony, laravel, vuejs, react, nextjs, nuxtjs, nodejs, hono, fastify
+  groupingConfigVersion: integer("grouping_config_version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 });
 
@@ -533,6 +542,37 @@ export const fingerprintRules = pgTable("fingerprint_rules", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => ({
   projectPriorityIdx: index("idx_fingerprint_rules_project").on(table.projectId, table.priority),
+}));
+
+// Stack trace rules (Sentry stack trace rulesets) — adjust in_app before grouping.
+export const stackTraceRules = pgTable("stack_trace_rules", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  matcher: text("matcher").notNull(), // 'path' | 'module'
+  pattern: text("pattern").notNull(),
+  action: text("action").notNull(), // 'mark_out_of_app' | 'mark_in_app'
+  priority: integer("priority").notNull().default(0),
+  description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+  projectPriorityIdx: index("idx_stack_trace_rules_project").on(table.projectId, table.priority),
+}));
+
+// Old → new fingerprint redirects after regrouping migration.
+export const fingerprintAliases = pgTable("fingerprint_aliases", {
+  oldFingerprint: text("old_fingerprint").primaryKey(),
+  newFingerprint: text("new_fingerprint")
+    .notNull()
+    .references(() => errorGroups.fingerprint, { onDelete: "cascade" }),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+  newFpIdx: index("idx_fingerprint_aliases_new").on(table.newFingerprint),
+  projectIdx: index("idx_fingerprint_aliases_project").on(table.projectId),
 }));
 
 // ============================================

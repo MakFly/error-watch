@@ -133,6 +133,7 @@ export const api = {
   },
   logs: {
     tail: logsApi.tail,
+    stats: logsApi.stats,
   },
   attention: {
     getTop: attentionApi.getTop,

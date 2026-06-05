@@ -40,6 +40,11 @@ logs/
 *.sqlite
 *.sqlite3
 
+# Database dumps — large, local-only (restore via scripts/db-reset.sh)
+# Scoped to /data/ so tracked Drizzle migrations (apps/api/drizzle/*.sql) are unaffected.
+/data/*
+!/data/.gitkeep
+
 # Build artifacts
 dist/
 .next/

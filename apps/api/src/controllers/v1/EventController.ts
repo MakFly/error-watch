@@ -7,8 +7,8 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../../types/hono";
 import { z } from "zod";
-import { createHash } from "crypto";
 import logger from "../../logger";
+import { previewDedupFingerprint } from "../../services/grouping";
 import { canAcceptEvent, incrementQuotaCache } from "../../services/quotas";
 import { getProjectPlan } from "../../services/subscriptions";
 import { eventQueue } from "../../queue/queues";
@@ -240,14 +240,18 @@ export const submit = async (c: Context<AppEnv>) => {
     // Normalize to unified EventJobData (handles both formats)
     const normalized = normalizeEvent(validated, projectId, isEnriched);
 
-    // Dedup fingerprint differs by format:
-    //   v1: sha1(projectId|message|file|line)
-    //   v2: sha1(projectId|exceptionType|exceptionValue|file)
-    const dedupRaw = isEnriched
-      ? `${projectId}|${normalized.exceptionType}|${normalized.exceptionValue}|${normalized.file}`
-      : `${projectId}|${normalized.message}|${normalized.file}|${normalized.line}`;
-
-    const dedupFingerprint = createHash("sha1").update(dedupRaw).digest("hex");
+    const dedupFingerprint = previewDedupFingerprint({
+      projectId,
+      message: normalized.message,
+      frames: normalized.frames,
+      stack: normalized.stack,
+      exceptionType: normalized.exceptionType,
+      exceptionValue: normalized.exceptionValue,
+      exceptionValues: normalized.exceptionValues ?? null,
+      file: normalized.file,
+      line: normalized.line,
+      sdkFingerprint: normalized.sdkFingerprint ?? null,
+    });
     const dedupKey = `dedup:evt:${projectId}:${dedupFingerprint}`;
     const isDuplicate = await redis.get(dedupKey);
     if (isDuplicate) {

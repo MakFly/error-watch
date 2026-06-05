@@ -7,5 +7,6 @@ const router = new Hono();
 
 router.post("/", apiKeyMiddleware, LogsController.ingest);
 router.get("/tail", auth(), LogsController.tail);
+router.get("/stats", auth(), LogsController.stats);
 
 export default router;

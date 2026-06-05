@@ -49,7 +49,14 @@ export default function RequestDetailPage() {
   const type = searchParams.get("type") === "transaction" ? "transaction" : "endpoint";
 
   if (type === "transaction") {
-    return <TransactionView baseUrl={baseUrl} transactionId={rawId} />;
+    return (
+      <TransactionView
+        baseUrl={baseUrl}
+        transactionId={rawId}
+        orgSlug={orgSlug}
+        projectSlug={projectSlug}
+      />
+    );
   }
 
   return <EndpointView baseUrl={baseUrl} routeName={decodeURIComponent(rawId)} />;
@@ -253,13 +260,23 @@ function EndpointView({ baseUrl, routeName }: { baseUrl: string; routeName: stri
 function TransactionView({
   baseUrl,
   transactionId,
+  orgSlug,
+  projectSlug,
 }: {
   baseUrl: string;
   transactionId: string;
+  orgSlug: string;
+  projectSlug: string;
 }) {
   const t = useTranslations("performance");
   const tReq = useTranslations("performance.requests");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const defaultTab =
+    tabParam === "logs" || tabParam === "spans" || tabParam === "overview"
+      ? tabParam
+      : "overview";
 
   const { data: transaction, isLoading } =
     trpc.performance.getTransaction.useQuery(
@@ -298,7 +315,13 @@ function TransactionView({
         </Button>
       </div>
 
-      <TransactionDetail transaction={transaction} />
+      <TransactionDetail
+        transaction={transaction}
+        projectId={transaction.projectId}
+        orgSlug={orgSlug}
+        projectSlug={projectSlug}
+        defaultTab={defaultTab}
+      />
     </div>
   );
 }

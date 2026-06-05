@@ -79,35 +79,54 @@ function TimelineRow({
       )}
     >
       <button
+        type="button"
         onClick={() => hasData && setExpanded((v) => !v)}
         disabled={!hasData}
         className={cn(
-          "flex w-full items-center gap-3 px-6 py-2.5 text-left transition-colors md:px-8",
+          "flex w-full flex-col items-stretch gap-2 px-4 py-3 text-left transition-colors sm:flex-row sm:items-start sm:gap-3 md:px-6",
           hasData && "hover:bg-muted/20",
-          isError && "hover:bg-signal-error/10"
+          isError && "hover:bg-signal-error/10",
         )}
       >
-        {hasData ? (
-          <span className="shrink-0 text-muted-foreground/60">
-            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        <div className="flex shrink-0 items-center gap-3">
+          {hasData ? (
+            <span className="shrink-0 text-muted-foreground/60">
+              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </span>
+          ) : (
+            <span className="w-4 shrink-0" />
+          )}
+          <span
+            className={cn(
+              "shrink-0 tabular-nums text-sm",
+              isError ? "font-semibold text-signal-error" : "text-muted-foreground",
+            )}
+          >
+            {formatTime(breadcrumb.timestamp)}
           </span>
-        ) : (
-          <span className="w-4 shrink-0" />
-        )}
-        <span className={cn("shrink-0 tabular-nums text-sm", isError ? "text-signal-error font-semibold" : "text-muted-foreground")}>
-          {formatTime(breadcrumb.timestamp)}
-        </span>
-        <Icon className={cn("h-4 w-4 shrink-0", config.color)} />
-        <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider", config.color, "border-current/30")}>
-          {config.label}
-        </span>
-        <span className={cn("min-w-0 flex-1 truncate text-sm", isError ? "text-signal-error font-medium" : "text-foreground")}>
+          <Icon className={cn("h-4 w-4 shrink-0", config.color)} />
+          <span
+            className={cn(
+              "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+              config.color,
+              "border-current/30",
+            )}
+          >
+            {config.label}
+          </span>
+        </div>
+        <p
+          className={cn(
+            "w-full min-w-0 break-words whitespace-pre-wrap text-sm leading-relaxed sm:flex-1",
+            isError ? "font-medium text-signal-error" : "text-foreground",
+          )}
+        >
           {text}
-        </span>
+        </p>
       </button>
 
       {expanded && hasData && (
-        <pre className="overflow-x-auto px-6 py-2 pl-[4.5rem] font-mono text-xs text-muted-foreground md:px-8 md:pl-24">
+        <pre className="overflow-x-auto whitespace-pre-wrap break-words px-4 py-2 font-mono text-xs text-muted-foreground md:px-6">
           {JSON.stringify(breadcrumb.data, null, 2)}
         </pre>
       )}
@@ -154,7 +173,7 @@ export function EventTimeline({
 
   return (
     <div className={cn("flex flex-col", className)}>
-      <div className="flex items-center justify-between border-b border-dashboard-border px-6 py-3 md:px-8">
+      <div className="flex items-center justify-between border-b border-dashboard-border px-4 py-3 md:px-6">
         <div className="flex items-center gap-2">
           <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t("title")}
@@ -177,14 +196,14 @@ export function EventTimeline({
       {hiddenCount > 0 && (
         <button
           onClick={() => setShowAll(true)}
-          className="border-b border-dashboard-border/40 px-6 py-2 text-left font-mono text-xs text-muted-foreground hover:bg-muted/20 hover:text-foreground md:px-8"
+          className="border-b border-dashboard-border/40 px-4 py-2 text-left font-mono text-xs text-muted-foreground hover:bg-muted/20 hover:text-foreground md:px-6"
         >
           ↑ {t("showEarlier", { count: hiddenCount })}
         </button>
       )}
 
       {displayBreadcrumbs.length === 0 && !errorMessage ? (
-        <p className="px-6 py-8 text-center text-sm text-muted-foreground md:px-8">
+        <p className="px-4 py-8 text-center text-sm text-muted-foreground md:px-6">
           {t("noBreadcrumbs")}
         </p>
       ) : (

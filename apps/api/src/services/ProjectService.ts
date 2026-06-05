@@ -3,6 +3,7 @@ import { OrganizationRepository } from "../repositories/OrganizationRepository";
 import { canCreateProject } from "./subscriptions";
 import { type Platform } from "../utils/sdk-instructions";
 import logger from "../logger";
+import { seedDefaultStackTraceRules } from "./grouping/seedStackTraceRules";
 
 export const ProjectService = {
   getAll: async (userId: string) => {
@@ -44,6 +45,10 @@ export const ProjectService = {
       environment: data.environment || "production",
       platform: data.platform,
       createdAt: new Date(),
+    });
+
+    await seedDefaultStackTraceRules(project.id).catch((err) => {
+      logger.warn("Failed to seed stack trace rules", { projectId: project.id, err });
     });
 
     logger.info("Project created", { projectId: project.id, userId, platform: data.platform });

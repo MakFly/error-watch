@@ -119,9 +119,16 @@ export interface EventJobData {
     pre_context?: string[] | null;
     post_context?: string[] | null;
   }>;
-  fingerprintVersion?: 1 | 2;
+  fingerprintVersion?: 1 | 2 | 3;
   // SDK-supplied explicit fingerprint (overrides auto-generation when set)
   sdkFingerprint?: string | null;
+  // Sentry exception.values[] (chained exceptions, root = last entry)
+  exceptionValues?: Array<{
+    type: string;
+    value: string;
+    mechanism?: { type?: string; handled?: boolean; source?: string } | null;
+  }> | null;
+  mechanism?: { type?: string; handled?: boolean; source?: string } | null;
   // Distributed tracing correlation (W3C traceparent)
   traceId?: string | null;
   spanId?: string | null;

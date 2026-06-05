@@ -4,6 +4,12 @@
  * into a unified EventJobData shape for BullMQ processing.
  */
 import type { EventJobData } from "../queue/queues";
+import {
+  computeGroupMetadata,
+  parseExceptionFromMessage,
+  resolveFrames,
+  stripLogPrefix,
+} from "./grouping";
 
 // Regex to extract exception type from a legacy message string
 // Matches: "SomeNamespace\SomeException: message" or "TypeError: message"
@@ -39,8 +45,15 @@ export interface LegacyValidatedEvent {
  */
 export interface EnrichedValidatedEvent {
   exception?: {
-    type: string;
-    value: string;
+    type?: string;
+    value?: string;
+    mechanism?: { type?: string; handled?: boolean; source?: string };
+    values?: Array<{
+      type?: string;
+      value?: string;
+      stacktrace?: { frames?: EnrichedValidatedEvent["frames"] };
+      mechanism?: { type?: string; handled?: boolean; source?: string };
+    }>;
   };
   message?: string;
   event_id?: string;
@@ -115,24 +128,22 @@ export function extractHttpStatusCodeFromMessage(message: string | null | undefi
  * Normalize a legacy v1 event into EventJobData.
  */
 function normalizeLegacy(input: LegacyValidatedEvent, projectId: string): EventJobData {
-  let exceptionType: string;
-  let exceptionValue: string;
-
-  const match = EXCEPTION_TYPE_RE.exec(input.message);
-  if (match) {
-    exceptionType = match[1];
-    // Everything after "ExceptionType: "
-    exceptionValue = input.message.slice(match[0].length).trim();
-  } else {
-    exceptionType = "Error";
-    exceptionValue = input.message;
-  }
+  const parsed = parseExceptionFromMessage(input.message);
+  const frames = resolveFrames(undefined, input.stack);
+  const metadata = computeGroupMetadata({
+    message: input.message,
+    frames,
+    exceptionType: parsed.type,
+    exceptionValue: parsed.value,
+    file: input.file,
+    line: input.line,
+  });
 
   return {
     projectId,
     message: input.message,
-    file: input.file,
-    line: input.line,
+    file: metadata.file || input.file,
+    line: metadata.line || input.line,
     stack: input.stack,
     env: input.env,
     url: input.url ?? null,
@@ -143,10 +154,10 @@ function normalizeLegacy(input: LegacyValidatedEvent, projectId: string): EventJ
     createdAt: normalizeTimestamp(input.created_at),
     release: input.release ?? null,
     userId: input.user_id ?? null,
-    // v2 fields
-    exceptionType,
-    exceptionValue,
-    fingerprintVersion: 1,
+    exceptionType: metadata.exceptionType,
+    exceptionValue: metadata.exceptionValue,
+    frames: metadata.normalizedFrames,
+    fingerprintVersion: 3,
     sdkFingerprint: flattenFingerprint(input.fingerprint),
     traceId: input.trace_id ?? null,
     spanId: input.span_id ?? null,
@@ -156,46 +167,66 @@ function normalizeLegacy(input: LegacyValidatedEvent, projectId: string): EventJ
 /**
  * Normalize an enriched v2 event into EventJobData.
  */
+function extractExceptionValues(input: EnrichedValidatedEvent): EventJobData["exceptionValues"] {
+  const values = input.exception?.values;
+  if (!values || values.length === 0) return null;
+  return values
+    .filter((v) => v.type || v.value)
+    .map((v) => ({
+      type: v.type ?? "Error",
+      value: v.value ?? "",
+      mechanism: v.mechanism ?? null,
+    }));
+}
+
 function normalizeEnriched(input: EnrichedValidatedEvent, projectId: string): EventJobData {
-  // Synthesize exception type/value when the SDK only sent a message
-  // (e.g. captureMessage / Logger handler events).
+  const exceptionValues = extractExceptionValues(input);
+  const rootFromChain = exceptionValues?.length
+    ? exceptionValues[exceptionValues.length - 1]
+    : null;
+
   let exceptionType: string;
   let exceptionValue: string;
 
-  if (input.exception) {
+  if (rootFromChain) {
+    exceptionType = rootFromChain.type;
+    exceptionValue = rootFromChain.value;
+  } else if (input.exception?.type && input.exception?.value) {
     exceptionType = input.exception.type;
     exceptionValue = input.exception.value;
   } else if (input.message) {
-    const match = EXCEPTION_TYPE_RE.exec(input.message);
-    if (match) {
-      exceptionType = match[1];
-      exceptionValue = input.message.slice(match[0].length).trim();
-    } else {
-      // Map level → synthetic exception type so the dashboard groups by severity
-      exceptionType = (input.level ?? "info").toUpperCase();
-      exceptionValue = input.message;
-    }
+    const parsed = parseExceptionFromMessage(input.message);
+    exceptionType = parsed.type;
+    exceptionValue = parsed.value;
   } else {
     exceptionType = "Unknown";
     exceptionValue = "(no message)";
   }
 
-  // Reconstruct message for backward compat
-  const message = input.message ?? `${exceptionType}: ${exceptionValue}`;
+  const message =
+    input.message ?? stripLogPrefix(`${exceptionType}: ${exceptionValue}`);
 
-  // Extract file/line from first in_app frame if not provided directly
-  let file = input.file;
-  let line = input.line;
-  if ((!file || !line) && input.frames && input.frames.length > 0) {
-    const inAppFrame = input.frames.find((f) => f.in_app === true) ?? input.frames[0];
-    file = file ?? inAppFrame.filename;
-    line = line ?? (inAppFrame.lineno ?? undefined);
-  }
+  const nestedFrames = input.exception?.values?.[0]?.stacktrace?.frames;
+  const allFrames = input.frames?.length ? input.frames : nestedFrames;
+  const normalizedFrames = resolveFrames(allFrames, input.stack);
+
+  const metadata = computeGroupMetadata({
+    message,
+    frames: normalizedFrames,
+    exceptionType,
+    exceptionValue,
+    exceptionValues,
+    file: input.file,
+    line: input.line,
+  });
+
+  const file = metadata.file;
+  const line = metadata.line;
 
   // Generate stack string from frames if stack not provided
   let stack = input.stack;
-  if (!stack && input.frames && input.frames.length > 0) {
-    stack = input.frames
+  if (!stack && metadata.normalizedFrames.length > 0) {
+    stack = metadata.normalizedFrames
       .map((f) => {
         const loc = [f.filename, f.lineno, f.colno].filter((v) => v != null).join(":");
         const fn = f.function ?? "<anonymous>";
@@ -233,8 +264,10 @@ function normalizeEnriched(input: EnrichedValidatedEvent, projectId: string): Ev
     release: input.release ?? null,
     userId: input.user?.id ?? input.user_id ?? null,
     // v2 enriched fields
-    exceptionType,
-    exceptionValue,
+    exceptionType: metadata.exceptionType,
+    exceptionValue: metadata.exceptionValue,
+    exceptionValues,
+    mechanism: input.exception?.mechanism ?? rootFromChain?.mechanism ?? null,
     platform: input.platform,
     serverName: input.server_name,
     tags: input.tags,
@@ -247,8 +280,8 @@ function normalizeEnriched(input: EnrichedValidatedEvent, projectId: string): Ev
         : undefined),
     contexts: input.contexts,
     sdk: input.sdk,
-    frames: input.frames,
-    fingerprintVersion: 2,
+    frames: metadata.normalizedFrames,
+    fingerprintVersion: 3,
     sdkFingerprint: flattenFingerprint(input.fingerprint),
     traceId: input.trace_id ?? null,
     spanId: input.span_id ?? null,
@@ -265,6 +298,63 @@ function normalizeTimestamp(ts: number | string): string {
     return Number.isNaN(parsed) ? new Date().toISOString() : new Date(parsed).toISOString();
   }
   return ts < 1e12 ? new Date(ts * 1000).toISOString() : new Date(ts).toISOString();
+}
+
+/** Envelope payload shape (Sentry-style /api/v1/envelope). */
+export interface EnvelopeInput {
+  message?: string;
+  exception?: EnrichedValidatedEvent["exception"];
+  frames?: EnrichedValidatedEvent["frames"];
+  environment?: string;
+  release?: string | null;
+  server_name?: string;
+  tags?: Record<string, string>;
+  user?: EnrichedValidatedEvent["user"];
+  request?: EnrichedValidatedEvent["request"];
+  contexts?: Record<string, unknown>;
+  sdk?: EnrichedValidatedEvent["sdk"];
+  level: EnrichedValidatedEvent["level"];
+  timestamp?: number | string;
+  breadcrumbs?: unknown[];
+  session_id?: string;
+  fingerprint?: string | null;
+  trace_id?: string | null;
+  span_id?: string | null;
+  status_code?: number | null;
+  extra?: Record<string, unknown>;
+  profile?: Record<string, unknown> | null;
+}
+
+export function normalizeEnvelope(input: EnvelopeInput, projectId: string): EventJobData {
+  const nestedFrames = input.exception?.values?.[0]?.stacktrace?.frames;
+  const frames = input.frames?.length ? input.frames : nestedFrames;
+
+  return normalizeEvent(
+    {
+      exception: input.exception,
+      message: input.message,
+      frames: frames as EnrichedValidatedEvent["frames"],
+      env: input.environment ?? "unknown",
+      level: input.level,
+      created_at: input.timestamp ?? Date.now(),
+      breadcrumbs: input.breadcrumbs,
+      session_id: input.session_id,
+      release: input.release,
+      user: input.user,
+      request: input.request,
+      contexts: input.contexts,
+      sdk: input.sdk as EnrichedValidatedEvent["sdk"],
+      tags: input.tags,
+      extra: input.extra,
+      fingerprint: input.fingerprint,
+      trace_id: input.trace_id,
+      span_id: input.span_id,
+      status_code: input.status_code,
+      profile: input.profile,
+    },
+    projectId,
+    true,
+  );
 }
 
 /**

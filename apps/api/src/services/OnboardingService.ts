@@ -5,6 +5,7 @@ import { ApiKeyService } from "./ApiKeyService";
 import { getSdkInstructions, type Platform } from "../utils/sdk-instructions";
 import { canCreateOrganization } from "./subscriptions";
 import logger from "../logger";
+import { seedDefaultStackTraceRules } from "./grouping/seedStackTraceRules";
 
 export const OnboardingService = {
   getStatus: async (userId: string) => {
@@ -84,6 +85,10 @@ export const OnboardingService = {
       environment: data.environment || "production",
       platform: data.platform,
       createdAt: now,
+    });
+
+    await seedDefaultStackTraceRules(projectId).catch((err) => {
+      logger.warn("Failed to seed stack trace rules", { projectId, err });
     });
 
     const apiKey = await ApiKeyService.create(projectId, "Default API Key", userId);

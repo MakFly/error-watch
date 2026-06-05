@@ -1,8 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Activity, Calendar, Clock, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useFormatRel } from "./use-format-rel";
 
 interface OccurrenceChartProps {
   count: number;
@@ -11,25 +11,14 @@ interface OccurrenceChartProps {
   users?: number;
   timeline: Array<{ date: string; count: number }>;
   className?: string;
+  variant?: "default" | "compact";
 }
 
 function formatDate(date: string | Date): string {
-  return new Date(date).toLocaleDateString("en-US", {
+  return new Date(date).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
-}
-
-function formatTimeAgo(date: string | Date): string {
-  const now = new Date();
-  const then = new Date(date);
-  const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
-
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-  return formatDate(date);
 }
 
 function Sparkline({ data, className }: { data: number[]; className?: string }) {
@@ -37,37 +26,35 @@ function Sparkline({ data, className }: { data: number[]; className?: string }) 
 
   const max = Math.max(...data, 1);
   const width = 100;
-  const height = 32;
+  const height = 28;
   const padding = 2;
 
-  const points = data.map((value, index) => {
-    const x = padding + (index / (data.length - 1)) * (width - padding * 2);
-    const y = height - padding - (value / max) * (height - padding * 2);
-    return `${x},${y}`;
-  }).join(" ");
+  const points = data
+    .map((value, index) => {
+      const x = padding + (index / Math.max(data.length - 1, 1)) * (width - padding * 2);
+      const y = height - padding - (value / max) * (height - padding * 2);
+      return `${x},${y}`;
+    })
+    .join(" ");
 
-  // Create fill area
   const fillPoints = `${padding},${height - padding} ${points} ${width - padding},${height - padding}`;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className={cn("w-full h-8", className)}>
+    <svg viewBox={`0 0 ${width} ${height}`} className={cn("h-7 w-full", className)} aria-hidden>
       <defs>
-        <linearGradient id="sparkline-gradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="hsl(var(--pulse-primary))" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="hsl(var(--pulse-primary))" stopOpacity="0" />
+        <linearGradient id="issue-sparkline" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <polygon
-        points={fillPoints}
-        fill="url(#sparkline-gradient)"
-      />
+      <polygon points={fillPoints} fill="url(#issue-sparkline)" className="text-primary" />
       <polyline
         points={points}
         fill="none"
-        stroke="hsl(var(--pulse-primary))"
+        stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
-        strokeLinejoin="round"
+        className="text-primary/80"
       />
     </svg>
   );
@@ -80,73 +67,79 @@ export function OccurrenceChart({
   users,
   timeline,
   className,
+  variant = "default",
 }: OccurrenceChartProps) {
   const t = useTranslations("issueDetail.occurrenceChart");
-  const sparklineData = timeline.map(t => t.count);
+  const formatRel = useFormatRel();
+  const sparklineData = timeline.map((point) => point.count);
+  const periodTotal = sparklineData.reduce((a, b) => a + b, 0);
+
+  if (variant === "compact") {
+    return (
+      <div className={cn("space-y-4", className)}>
+        <div>
+          <p className="text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+            {count.toLocaleString()}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t("occurrences")}</p>
+        </div>
+        <div className="text-primary">
+          <Sparkline data={sparklineData} />
+          <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
+            <span>{t("last30days")}</span>
+            <span className="tabular-nums">
+              {periodTotal.toLocaleString()} {t("events")}
+            </span>
+          </div>
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+          <div>
+            <dt className="text-muted-foreground">{t("firstSeen")}</dt>
+            <dd className="mt-0.5 font-medium text-foreground">{formatDate(firstSeen)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">{t("lastSeen")}</dt>
+            <dd className="mt-0.5 font-medium text-foreground">{formatRel(lastSeen)}</dd>
+          </div>
+          {users !== undefined && (
+            <div className="col-span-2">
+              <dt className="text-muted-foreground">{t("users")}</dt>
+              <dd className="mt-0.5 font-medium text-foreground">{users.toLocaleString()}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+    );
+  }
 
   return (
-    <div className={cn(
-      "rounded-xl border border-issues-border bg-issues-surface overflow-hidden",
-      className
-    )}>
+    <div className={cn("overflow-hidden rounded-xl border border-border/60 bg-card/40", className)}>
       <div className="p-4 md:p-5">
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-4">
-          {/* Occurrences */}
+        <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
           <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <Activity className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-mono uppercase tracking-wider">{t("occurrences")}</span>
-            </div>
-            <p className="font-mono text-2xl font-bold text-foreground tabular-nums">
-              {count.toLocaleString()}
-            </p>
+            <span className="text-xs text-muted-foreground">{t("occurrences")}</span>
+            <p className="text-2xl font-semibold tabular-nums text-foreground">{count.toLocaleString()}</p>
           </div>
-
-          {/* First seen */}
           <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-mono uppercase tracking-wider">{t("firstSeen")}</span>
-            </div>
-            <p className="font-mono text-sm text-foreground">
-              {formatDate(firstSeen)}
-            </p>
+            <span className="text-xs text-muted-foreground">{t("firstSeen")}</span>
+            <p className="text-sm font-medium text-foreground">{formatDate(firstSeen)}</p>
           </div>
-
-          {/* Last seen */}
           <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-mono uppercase tracking-wider">{t("lastSeen")}</span>
-            </div>
-            <p className="font-mono text-sm text-foreground">
-              {formatTimeAgo(lastSeen)}
-            </p>
+            <span className="text-xs text-muted-foreground">{t("lastSeen")}</span>
+            <p className="text-sm font-medium text-foreground">{formatRel(lastSeen)}</p>
           </div>
-
-          {/* Users affected */}
           {users !== undefined && (
             <div className="space-y-1">
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <Users className="h-3.5 w-3.5" />
-                <span className="text-[10px] font-mono uppercase tracking-wider">{t("users")}</span>
-              </div>
-              <p className="font-mono text-sm text-foreground">
-                {users.toLocaleString()}
-              </p>
+              <span className="text-xs text-muted-foreground">{t("users")}</span>
+              <p className="text-sm font-medium text-foreground">{users.toLocaleString()}</p>
             </div>
           )}
         </div>
-
-        {/* Sparkline */}
-        <div className="pt-2 border-t border-issues-border">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-              {t("last30days")}
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground">
-              {sparklineData.reduce((a, b) => a + b, 0).toLocaleString()} {t("events")}
+        <div className="border-t border-border/50 pt-3 text-primary">
+          <div className="mb-2 flex justify-between text-[11px] text-muted-foreground">
+            <span>{t("last30days")}</span>
+            <span className="tabular-nums">
+              {periodTotal.toLocaleString()} {t("events")}
             </span>
           </div>
           <Sparkline data={sparklineData} />

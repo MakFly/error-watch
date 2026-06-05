@@ -25,6 +25,23 @@ function parseDateRange(dateRange?: string): Date {
   return new Date(now - hours * 60 * 60 * 1000);
 }
 
+/** Map UI / legacy env tokens to the values actually stored on error_events. */
+function resolveEnvFilterValues(env: string): string[] {
+  switch (env) {
+    case "prod":
+    case "production":
+      return ["production", "prod"];
+    case "staging":
+    case "preprod":
+      return ["preprod", "staging"];
+    case "dev":
+    case "development":
+      return ["development", "dev"];
+    default:
+      return [env];
+  }
+}
+
 function encodeCursor(lastSeen: Date, fingerprint: string): string {
   return Buffer.from(`${lastSeen.toISOString()}|${fingerprint}`).toString("base64");
 }
@@ -182,14 +199,15 @@ export const GroupRepository = {
       `);
     }
 
-    // Environment filter - use subquery with EXISTS instead of IN for better performance
+    // Environment filter — match all aliases (prod/production, staging/preprod, …).
     if (filters?.env && filters.env !== "all") {
+      const envValues = resolveEnvFilterValues(filters.env);
       const envSubquery = db
         .select({ fingerprint: errorEvents.fingerprint })
         .from(errorEvents)
         .where(
           and(
-            eq(errorEvents.env, filters.env),
+            inArray(errorEvents.env, envValues),
             projectId ? eq(errorEvents.projectId, projectId) : undefined
           )
         )
@@ -283,6 +301,7 @@ export const GroupRepository = {
       projectId: row.project_id,
       message: row.message,
       title: row.title || "",
+      culprit: row.culprit || "",
       file: row.file,
       line: row.line,
       url: row.url ?? row.evt_url ?? null,
@@ -373,12 +392,13 @@ export const GroupRepository = {
     }
 
     if (filters?.env && filters.env !== "all") {
+      const envValues = resolveEnvFilterValues(filters.env);
       const envSubquery = db
         .select({ fingerprint: errorEvents.fingerprint })
         .from(errorEvents)
         .where(
           and(
-            eq(errorEvents.env, filters.env),
+            inArray(errorEvents.env, envValues),
             projectId ? eq(errorEvents.projectId, projectId) : undefined
           )
         )
@@ -464,6 +484,7 @@ export const GroupRepository = {
       projectId: row.project_id,
       message: row.message,
       title: row.title || "",
+      culprit: row.culprit || "",
       file: row.file,
       line: row.line,
       url: row.url ?? row.evt_url ?? null,

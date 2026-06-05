@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AlertTriangle, Copy } from "lucide-react";
 import type { TransactionWithSpans, Span } from "@/server/api/types";
+import { EmbeddedLogsPanel } from "@/components/logs/EmbeddedLogsPanel";
 
 function formatDuration(ms: number): string {
   if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
@@ -324,9 +325,19 @@ function WaterfallGrid({ spans, totalDuration, transactionStart }: {
 
 interface TransactionDetailProps {
   transaction: TransactionWithSpans;
+  projectId?: string;
+  orgSlug?: string;
+  projectSlug?: string;
+  defaultTab?: "overview" | "spans" | "logs";
 }
 
-export function TransactionDetail({ transaction }: TransactionDetailProps) {
+export function TransactionDetail({
+  transaction,
+  projectId,
+  orgSlug,
+  projectSlug,
+  defaultTab = "overview",
+}: TransactionDetailProps) {
   const t = useTranslations("performance.transactionDetail");
 
   const transactionStart = new Date(transaction.startTimestamp).getTime();
@@ -359,10 +370,13 @@ export function TransactionDetail({ transaction }: TransactionDetailProps) {
     | undefined;
 
   return (
-    <Tabs defaultValue="overview" className="space-y-6">
+    <Tabs defaultValue={defaultTab} className="space-y-6">
       <TabsList>
         <TabsTrigger value="overview">{t("tabs.overview")}</TabsTrigger>
         <TabsTrigger value="spans">{t("tabs.spans")}</TabsTrigger>
+        {transaction.traceId && projectId && orgSlug && projectSlug && (
+          <TabsTrigger value="logs">{t("tabs.logs")}</TabsTrigger>
+        )}
       </TabsList>
 
       {/* ── Tab: Overview ── */}
@@ -554,6 +568,17 @@ export function TransactionDetail({ transaction }: TransactionDetailProps) {
           </CardContent>
         </Card>
       </TabsContent>
+
+      {transaction.traceId && projectId && orgSlug && projectSlug && (
+        <TabsContent value="logs" className="space-y-4">
+          <EmbeddedLogsPanel
+            projectId={projectId}
+            traceId={transaction.traceId}
+            orgSlug={orgSlug}
+            projectSlug={projectSlug}
+          />
+        </TabsContent>
+      )}
     </Tabs>
   );
 }

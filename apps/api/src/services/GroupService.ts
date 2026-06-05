@@ -168,6 +168,7 @@ export const GroupService = {
         release: applicationLogs.release,
         source: applicationLogs.source,
         url: applicationLogs.url,
+        statusCode: applicationLogs.statusCode,
         requestId: applicationLogs.requestId,
         userId: applicationLogs.userId,
         traceId: applicationLogs.traceId,

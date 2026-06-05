@@ -11,6 +11,8 @@ export type ErrorGroup = {
   message: string;
   /** Sentry-style display title computed at ingest time. Empty string for legacy rows; UI falls back to message. */
   title?: string;
+  /** Sentry-style culprit (e.g. "DocumentService.php in getUserInputValue"). */
+  culprit?: string;
   file: string;
   line: number;
   url?: string | null;
@@ -67,6 +69,7 @@ export type ErrorEvent = {
   // v2 enriched fields
   exceptionType?: string;
   exceptionValue?: string;
+  mechanism?: { type?: string; handled?: boolean; source?: string } | null;
   platform?: string;
   serverName?: string;
   tags?: Record<string, string>;

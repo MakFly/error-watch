@@ -8,16 +8,24 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../../types/hono";
 import { z } from "zod";
-import { createHash } from "crypto";
 import logger from "../../logger";
 import { canAcceptEvent, incrementQuotaCache } from "../../services/quotas";
 import { getProjectPlan } from "../../services/subscriptions";
 import { eventQueue } from "../../queue/queues";
 import { isRedisAvailable, redis } from "../../queue/connection";
 import { ProjectSettingsRepository } from "../../repositories/ProjectSettingsRepository";
-import { extractHttpStatusCodeFromMessage } from "../../services/eventNormalizer";
+import { normalizeEnvelope } from "../../services/eventNormalizer";
+import { previewDedupFingerprint } from "../../services/grouping";
 
 const isProduction = process.env.NODE_ENV === "production";
+
+const mechanismSchema = z
+  .object({
+    type: z.string().max(100).optional(),
+    handled: z.boolean().optional(),
+    source: z.string().max(100).optional(),
+  })
+  .passthrough();
 
 const frameSchema = z.object({
   filename: z.string().max(2000).optional(),
@@ -33,7 +41,6 @@ const frameSchema = z.object({
 }).passthrough();
 
 export const envelopeSchema = z.object({
-  // Sentry-style core
   event_id: z.string().min(1).max(64).optional(),
   timestamp: z.union([z.number(), z.string()]).optional(),
   platform: z.string().max(50).optional(),
@@ -47,11 +54,11 @@ export const envelopeSchema = z.object({
   exception: z.object({
     type: z.string().max(500).optional(),
     value: z.string().max(10000).optional(),
-    // Sentry nests frames inside `exception.values[0].stacktrace.frames`
-    // — we also accept a top-level `frames` for flatter SDKs.
+    mechanism: mechanismSchema.optional(),
     values: z.array(z.object({
       type: z.string().max(500).optional(),
       value: z.string().max(10000).optional(),
+      mechanism: mechanismSchema.optional(),
       stacktrace: z.object({
         frames: z.array(frameSchema).max(100).optional(),
       }).optional(),
@@ -76,82 +83,38 @@ export const envelopeSchema = z.object({
     data: z.unknown().optional(),
   }).passthrough().optional(),
   breadcrumbs: z.any().optional(),
-  // ErrorWatch extensions
   trace_id: z.string().max(64).optional().nullable(),
   span_id: z.string().max(32).optional().nullable(),
   fingerprint: z.string().max(128).optional().nullable(),
   session_id: z.string().max(100).optional(),
   status_code: z.number().int().min(100).max(599).optional().nullable(),
   extra: z.record(z.string(), z.unknown()).optional(),
-  // Full request profile (laravel-web-profiler parity). Loose-typed on the
-  // wire; the SDK enforces shape. Persisted as-is in error_events.debug.
   profile: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
-type Frame = z.infer<typeof frameSchema>;
-
-function pickFrame(frames: Frame[] | undefined): Frame | undefined {
-  if (!frames || frames.length === 0) return undefined;
-  // Sentry-style frames are oldest -> newest; the last in-app frame is the throw site.
-  for (let i = frames.length - 1; i >= 0; i -= 1) {
-    if (frames[i].in_app !== false) return frames[i];
-  }
-  return frames[frames.length - 1];
-}
-
-function extractFrames(input: z.infer<typeof envelopeSchema>): Frame[] | undefined {
-  if (input.frames && input.frames.length > 0) return input.frames;
-  const nested = input.exception?.values?.[0]?.stacktrace?.frames;
-  if (nested && nested.length > 0) return nested;
-  return undefined;
-}
-
-function reconstructStackString(frames: Frame[] | undefined, message: string): string {
-  if (!frames || frames.length === 0) {
-    // Fallback so the required `stack` field stays non-empty.
-    return message || "[no stacktrace]";
-  }
-  return frames
-    .map((f, i) => `#${i} ${f.filename ?? "[internal]"}(${f.lineno ?? "?"}): ${f.function ?? "?"}`)
-    .join("\n");
-}
-
-function toMilliseconds(ts: number | string | undefined): number {
-  if (ts === undefined) return Date.now();
-  const n = typeof ts === "string" ? Date.parse(ts) : ts;
-  if (!Number.isFinite(n)) return Date.now();
-  // Heuristic: <1e12 → seconds, else already ms
-  return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
-}
-
 /**
- * Translate a validated envelope into the internal flat schema and enqueue it
- * on the events worker. Shared by the single-envelope endpoint and the batch
- * endpoint. Performs short-window dedup; returns `deduplicated: true` when the
- * event was suppressed. Caller is responsible for auth / settings / quota.
+ * Translate a validated envelope into EventJobData and enqueue it.
+ * Performs short-window dedup using the same fingerprint engine as the worker.
  */
 export async function enqueueEnvelopeEvent(
   input: z.infer<typeof envelopeSchema>,
   projectId: string,
 ): Promise<{ queued: boolean; deduplicated?: boolean }> {
-  const frames = extractFrames(input);
-  const topFrame = pickFrame(frames);
+  const normalized = normalizeEnvelope(input, projectId);
 
-  const file = topFrame?.filename || topFrame?.abs_path || "[unknown]";
-  const line = Math.max(1, topFrame?.lineno ?? 1);
+  const dedupFingerprint = previewDedupFingerprint({
+    projectId,
+    message: normalized.message,
+    frames: normalized.frames,
+    stack: normalized.stack,
+    exceptionType: normalized.exceptionType,
+    exceptionValue: normalized.exceptionValue,
+    exceptionValues: normalized.exceptionValues ?? null,
+    file: normalized.file,
+    line: normalized.line,
+    sdkFingerprint: normalized.sdkFingerprint ?? null,
+  });
 
-  const exceptionType =
-    input.exception?.type ?? input.exception?.values?.[0]?.type ?? undefined;
-  const exceptionValue =
-    input.exception?.value ?? input.exception?.values?.[0]?.value ?? undefined;
-  const message = exceptionValue || input.message || exceptionType || "Unknown error";
-
-  const stack = reconstructStackString(frames, message);
-  const createdAtMs = toMilliseconds(input.timestamp);
-
-  const dedupFingerprint = createHash("sha1")
-    .update(`${projectId}|${message}|${file}|${line}`)
-    .digest("hex");
   const dedupKey = `dedup:env:${projectId}:${dedupFingerprint}`;
   if (await redis.get(dedupKey)) {
     return { queued: false, deduplicated: true };
@@ -159,45 +122,12 @@ export async function enqueueEnvelopeEvent(
   await redis.setex(dedupKey, 10, "1");
 
   const shouldLinkReplay = ["fatal", "error"].includes(input.level);
-  const jobId = `env-${projectId}-${dedupFingerprint}-${Math.floor(Date.now() / 10000)}`;
+  if (!shouldLinkReplay) {
+    normalized.sessionId = null;
+  }
 
-  await eventQueue.add("process-event", {
-    projectId,
-    message,
-    file,
-    line,
-    stack,
-    env: input.environment ?? "unknown",
-    url: input.request?.url ?? null,
-    level: input.level,
-    statusCode:
-      input.status_code ??
-      extractHttpStatusCodeFromMessage(message) ??
-      (typeof (input.extra as { status_code?: unknown } | undefined)?.status_code === "number"
-        ? ((input.extra as { status_code: number }).status_code)
-        : null),
-    breadcrumbs: input.breadcrumbs ? JSON.stringify(input.breadcrumbs) : null,
-    sessionId: shouldLinkReplay ? (input.session_id ?? null) : null,
-    createdAt: new Date(createdAtMs).toISOString(),
-    release: input.release ?? null,
-    userId: input.user?.id ?? null,
-    exceptionType: exceptionType ?? undefined,
-    exceptionValue: exceptionValue ?? undefined,
-    platform: input.platform ?? undefined,
-    serverName: input.server_name ?? undefined,
-    tags: input.tags ?? undefined,
-    extra: input.extra ?? undefined,
-    userContext: input.user as any,
-    request: input.request as any,
-    contexts: input.contexts as any,
-    sdk: input.sdk as any,
-    frames,
-    fingerprintVersion: 2,
-    sdkFingerprint: input.fingerprint ?? null,
-    traceId: input.trace_id ?? null,
-    spanId: input.span_id ?? null,
-    debug: (input.profile ?? null) as any,
-  }, { jobId });
+  const jobId = `env-${projectId}-${dedupFingerprint}-${Math.floor(Date.now() / 10000)}`;
+  await eventQueue.add("process-event", normalized, { jobId });
 
   return { queued: true };
 }
@@ -213,13 +143,11 @@ export const submitEnvelope = async (c: Context<AppEnv>) => {
       return c.json({ error: "Invalid API key", code: "INVALID_API_KEY" }, 401);
     }
 
-    // Project-scoped ingestion toggle
     const projectSettings = await ProjectSettingsRepository.findByProjectId(projectId);
     if (projectSettings?.eventsEnabled === false) {
       return c.json({ error: "Event ingestion disabled", code: "INGESTION_DISABLED" }, 403);
     }
 
-    // Sample rate
     if (projectSettings?.sampleRate) {
       const rate = typeof projectSettings.sampleRate === "string"
         ? parseFloat(projectSettings.sampleRate)
@@ -229,7 +157,6 @@ export const submitEnvelope = async (c: Context<AppEnv>) => {
       }
     }
 
-    // Quotas
     const plan = await getProjectPlan(projectId);
     const quotaCheck = await canAcceptEvent(projectId, plan);
     if (!quotaCheck.allowed) {
@@ -237,7 +164,11 @@ export const submitEnvelope = async (c: Context<AppEnv>) => {
         {
           error: "Quota exceeded",
           code: "QUOTA_EXCEEDED",
-          message: quotaCheck.reason,
+          quota: {
+            used: quotaCheck.status.used,
+            limit: quotaCheck.status.limit,
+            percentage: quotaCheck.status.percentage,
+          },
         },
         429
       );
@@ -245,7 +176,11 @@ export const submitEnvelope = async (c: Context<AppEnv>) => {
 
     const redisUp = await isRedisAvailable();
     if (!redisUp) {
-      return c.json({ error: "Service temporarily unavailable", code: "SERVICE_UNAVAILABLE" }, 503);
+      logger.error("Redis unavailable, cannot queue envelope event");
+      return c.json(
+        { error: "Service temporarily unavailable", code: "SERVICE_UNAVAILABLE" },
+        503
+      );
     }
 
     const result = await enqueueEnvelopeEvent(input, projectId);
@@ -255,27 +190,19 @@ export const submitEnvelope = async (c: Context<AppEnv>) => {
 
     incrementQuotaCache(projectId).catch(() => {});
 
-    return c.json({ success: true, queued: true, event_id: input.event_id ?? null }, 202);
-  } catch (e) {
-    if (e instanceof z.ZodError) {
-      logger.warn("Invalid envelope input", {
-        issues: e.issues.slice(0, 5).map((i) => `${i.path.join(".")}: ${i.message}`),
-      });
+    return c.json({ success: true }, 202);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
       return c.json(
         {
-          error: "Invalid input",
+          error: "Validation failed",
           code: "VALIDATION_ERROR",
-          details: isProduction
-            ? undefined
-            : e.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+          details: isProduction ? undefined : error.issues,
         },
         400
       );
     }
-
-    logger.error("Failed to ingest envelope", {
-      error: e instanceof Error ? e.message : "Unknown",
-    });
+    logger.error("Envelope submission failed", { error });
     return c.json({ error: "Internal server error", code: "INTERNAL_ERROR" }, 500);
   }
 };

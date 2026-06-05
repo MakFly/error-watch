@@ -1,5 +1,6 @@
 export type LogLevel = "debug" | "info" | "warning" | "error";
 export type LogSource = "http" | "cli" | "messenger" | "deprecation" | "app";
+export type LogsStatsGroupBy = "level" | "channel" | "message";
 
 export type ApplicationLog = {
   id: string;
@@ -17,7 +18,6 @@ export type ApplicationLog = {
   requestId: string | null;
   userId: string | null;
   statusCode: number | null;
-  // Distributed tracing correlation (W3C traceparent)
   traceId: string | null;
   spanId: string | null;
   ingestedAt: Date;
@@ -36,8 +36,25 @@ export type LogsTailFilter = {
   level?: LogLevel;
   channel?: string;
   search?: string;
-  // Exact HTTP code ("422") or family ("4xx"/"5xx")
   statusCode?: string;
-  // Substring match against the request URL
   url?: string;
+  traceId?: string;
+  spanId?: string;
+  requestId?: string;
+  userId?: string;
+  env?: string;
+  release?: string;
+  attribute?: string;
+  from?: string;
+  to?: string;
+};
+
+export type LogsStatsFilter = Omit<LogsTailFilter, "limit" | "cursor"> & {
+  groupBy?: LogsStatsGroupBy;
+};
+
+export type LogsStatsResponse = {
+  buckets: Array<{ time: string; count: number }>;
+  aggregates: Array<{ key: string; count: number }>;
+  total: number;
 };

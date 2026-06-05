@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Rules
+
+Read the project-scoped rules in [`.claude/rules/`](.claude/rules/README.md) before working:
+
+- [`.claude/rules/database.md`](.claude/rules/database.md) — **PostgreSQL/Docker.** Dev DB is the
+  shared **`infra-postgres`** container (`localhost:5432`, `test/test`, DB `errorwatch`) — **not** the
+  bundled `errorwatch-postgres` (`55432`). `DATABASE_URL` in the root `.env` is authoritative.
+
+> **DB reset:** `scripts/db-reset.sh` drops + recreates `errorwatch` and restores from a dump in `data/`.
+
 ## Project Overview
 
 **ErrorWatch** - Self-hosted error monitoring SaaS for modern applications (Sentry alternative).

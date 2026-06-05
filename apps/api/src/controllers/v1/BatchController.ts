@@ -19,7 +19,7 @@ import { getProjectPlan } from "../../services/subscriptions";
 import { ProjectSettingsRepository } from "../../repositories/ProjectSettingsRepository";
 import { publishEvent } from "../../sse/publisher";
 import { envelopeSchema, enqueueEnvelopeEvent } from "./EnvelopeController";
-import { logsIngestSchema, buildLogRow } from "./LogsController";
+import { logsIngestSchema, buildLogRow, shouldAcceptLog } from "./LogsController";
 import { transactionPayloadSchema, persistTransaction } from "./PerformanceController";
 import { summarizeRejections } from "../../utils/batch";
 
@@ -85,10 +85,15 @@ export const submitBatch = async (c: Context<AppEnv>) => {
             break;
           }
           case "log": {
+            const rateDecision = await shouldAcceptLog(projectId);
+            if (!rateDecision.accept) {
+              rejected.push({ index: i, type: item.type, reason: "rate_limited" });
+              break;
+            }
             const parsed = logsIngestSchema.parse(item.payload);
             const { row, sse } = buildLogRow(parsed, projectId);
             logRows.push(row);
-            logSse.push(sse);
+            logSse.push({ ...sse, sampled: rateDecision.sampled });
             accepted.logs += 1;
             break;
           }
@@ -142,10 +147,11 @@ export const submitBatch = async (c: Context<AppEnv>) => {
       const orgId = project[0]?.organizationId;
       if (orgId) {
         for (const log of logSse) {
+          const { sampled, ...logPayload } = log as Record<string, unknown> & { sampled?: boolean };
           publishEvent(orgId, {
             type: "log:new",
             projectId,
-            payload: { log: log as never, sampled: false },
+            payload: { log: logPayload as never, sampled: sampled ?? false },
             timestamp: Date.now(),
           }).catch(() => {});
         }
