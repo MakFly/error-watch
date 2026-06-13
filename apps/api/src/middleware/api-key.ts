@@ -11,7 +11,8 @@ import type { AppEnv } from "../types/hono";
  * API Key validation middleware
  */
 export async function apiKeyMiddleware(c: Context<AppEnv>, next: Next) {
-  const apiKey = c.req.header("X-API-Key");
+  // Accept Flare's `x-api-token` header as a fallback for protocol compatibility.
+  const apiKey = c.req.header("X-API-Key") ?? c.req.header("x-api-token");
 
   // Check if API key is present
   if (!apiKey) {
