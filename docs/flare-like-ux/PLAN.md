@@ -44,8 +44,8 @@ L'ordre est **simplicité d'abord**, protocole ensuite. On valide visuellement c
 |---|-----------|----------|
 | 1.1 | Refondre la sidebar : groupe **Principal** (Dashboard, Errors, Performance, Logs) + groupe repliable **Plus** (Replays, Crons, Infrastructure, Stats) | `apps/web/src/components/errorwatch-sidebar.tsx` |
 | 1.2 | Uniformiser le vocabulaire : « Issues » → **« Errors »** partout (route, i18n, titres) | `src/messages/en-US.json`, `src/messages/fr.json`, libellés sidebar/pages |
-| 1.3 | Épurer la vue détail d'erreur : hiérarchie claire **Stack → Context → Occurrences**, alléger le header (1 action primaire « Resolve », le reste en menu `…`) | `apps/web/src/components/issue-detail/IssueDetailView.tsx` |
-| 1.4 | Page d'accueil projet (`page.tsx`) recentrée sur les erreurs récentes + 3 KPIs, pas un mur de widgets | `apps/web/src/app/[locale]/dashboard/[orgSlug]/[projectSlug]/page.tsx` |
+| 1.3 | Épurer la vue détail d'erreur | ~~`IssueDetailView.tsx`~~ — **vérifié : déjà façon Sentry (1 action primaire, header → onglets → rail). Rien à refondre.** |
+| 1.4 | ~~Page d'accueil recentrée errors-first~~ | **ANNULÉ par décision utilisateur (2026-06-13) : le tableau de bord reste tel quel** (widgets perf conservés). Commit revert `5a0ea1b`. |
 
 **Critères de succès (vérifiables)** :
 - La sidebar affiche **4 entrées principales** max au premier niveau ; le reste est sous « Plus » replié par défaut.
