@@ -5,16 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bug,
-  BarChart3,
   Gauge,
   Settings,
-  Film,
   HelpCircle,
   LayoutDashboard,
   Wrench,
   Terminal,
-  Clock,
-  Server,
+  MoreHorizontal,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -53,14 +50,14 @@ export function ErrorWatchSidebar({
     ? `/dashboard/${currentOrgSlug}/${currentProjectSlug}`
     : null;
 
-  // Build navigation items based on current org AND project, grouped semantically:
-  //   Monitoring   = what the user looks at to triage incidents
-  //   Observability = deeper analytics / replays / infrastructure
-  //   (Project utilities live in the navSecondary group at the bottom)
-  const { navMonitoring, navObservability } = React.useMemo(() => {
+  // Build navigation, Flare/Sentry-style: a short PRIMARY group (the 3 product
+  // pillars + dashboard) and a collapsed "More" group for everything secondary.
+  //   Primary = Dashboard, Errors, Performance, Logs
+  //   More    = Replays, Stats, Crons, Infrastructure (collapsed by default)
+  const { navPrimary, navMore } = React.useMemo(() => {
     if (!currentOrgSlug) {
       return {
-        navMonitoring: [
+        navPrimary: [
           {
             title: t("dashboard"),
             url: "/dashboard",
@@ -68,7 +65,7 @@ export function ErrorWatchSidebar({
             isActive: pathname === "/dashboard",
           },
         ],
-        navObservability: [],
+        navMore: [],
       };
     }
 
@@ -76,7 +73,7 @@ export function ErrorWatchSidebar({
     if (!baseUrl) {
       const orgUrl = `/dashboard/${currentOrgSlug}`;
       return {
-        navMonitoring: [
+        navPrimary: [
           {
             title: t("dashboard"),
             url: orgUrl,
@@ -84,12 +81,18 @@ export function ErrorWatchSidebar({
             isActive: pathname === orgUrl,
           },
         ],
-        navObservability: [],
+        navMore: [],
       };
     }
 
+    const moreActive =
+      pathname.startsWith(`${baseUrl}/replays`) ||
+      pathname.startsWith(`${baseUrl}/stats`) ||
+      pathname.startsWith(`${baseUrl}/crons`) ||
+      pathname.startsWith(`${baseUrl}/infrastructure`);
+
     return {
-      navMonitoring: [
+      navPrimary: [
         {
           title: t("dashboard"),
           url: baseUrl,
@@ -97,19 +100,11 @@ export function ErrorWatchSidebar({
           isActive: pathname === baseUrl,
         },
         {
-          title: t("issues"),
+          title: t("errors"),
           url: `${baseUrl}/issues`,
           icon: Bug,
           isActive: pathname.startsWith(`${baseUrl}/issues`),
         },
-        {
-          title: t("logs"),
-          url: `${baseUrl}/logs`,
-          icon: Terminal,
-          isActive: pathname.startsWith(`${baseUrl}/logs`),
-        },
-      ],
-      navObservability: [
         {
           title: t("performance"),
           url: `${baseUrl}/performance`,
@@ -124,28 +119,24 @@ export function ErrorWatchSidebar({
           ],
         },
         {
-          title: t("replays"),
-          url: `${baseUrl}/replays`,
-          icon: Film,
-          isActive: pathname.startsWith(`${baseUrl}/replays`),
+          title: t("logs"),
+          url: `${baseUrl}/logs`,
+          icon: Terminal,
+          isActive: pathname.startsWith(`${baseUrl}/logs`),
         },
+      ],
+      navMore: [
         {
-          title: t("stats"),
+          title: t("more"),
           url: `${baseUrl}/stats`,
-          icon: BarChart3,
-          isActive: pathname.startsWith(`${baseUrl}/stats`),
-        },
-        {
-          title: t("crons"),
-          url: `${baseUrl}/crons`,
-          icon: Clock,
-          isActive: pathname.startsWith(`${baseUrl}/crons`),
-        },
-        {
-          title: t("infrastructure"),
-          url: `${baseUrl}/infrastructure`,
-          icon: Server,
-          isActive: pathname.startsWith(`${baseUrl}/infrastructure`),
+          icon: MoreHorizontal,
+          isActive: moreActive,
+          children: [
+            { title: t("replays"), url: `${baseUrl}/replays`, isActive: pathname.startsWith(`${baseUrl}/replays`) },
+            { title: t("stats"), url: `${baseUrl}/stats`, isActive: pathname.startsWith(`${baseUrl}/stats`) },
+            { title: t("crons"), url: `${baseUrl}/crons`, isActive: pathname.startsWith(`${baseUrl}/crons`) },
+            { title: t("infrastructure"), url: `${baseUrl}/infrastructure`, isActive: pathname.startsWith(`${baseUrl}/infrastructure`) },
+          ],
         },
       ],
     };
@@ -236,8 +227,8 @@ export function ErrorWatchSidebar({
 
         <SidebarSeparator />
 
-        <NavMain items={navMonitoring} label={t("groups.monitoring")} />
-        <NavMain items={navObservability} label={t("groups.observability")} />
+        <NavMain items={navPrimary} />
+        <NavMain items={navMore} label={t("groups.more")} />
 
         <NavSecondary items={navSecondary} label={t("groups.project")} className="mt-auto" />
       </SidebarContent>
