@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { ErrorEvent } from "@/server/api";
 import { cn } from "@/lib/utils";
@@ -65,10 +65,6 @@ export function IssueDetailBody({
   }, [hasStack, hasBreadcrumbs, hasProfiler]);
 
   const activeTab = validTabs.includes(tab) ? tab : defaultTab;
-
-  useEffect(() => {
-    if (!validTabs.includes(tab)) setTab(defaultTab);
-  }, [selectedEvent?.id, validTabs, tab, defaultTab]);
 
   if (!selectedEvent) {
     return (

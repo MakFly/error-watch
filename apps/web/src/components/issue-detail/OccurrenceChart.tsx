@@ -45,9 +45,9 @@ function Sparkline({
   timeline: Array<{ date: string; count: number }>;
   className?: string;
 }) {
-  if (timeline.length === 0) return null;
-
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  if (timeline.length === 0) return null;
   const activePoint = activeIndex !== null ? timeline[activeIndex] : null;
   const data = timeline.map((point) => point.count);
   const max = Math.max(...data, 1);
