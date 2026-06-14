@@ -18,7 +18,7 @@ const WORKER_CONCURRENCY = parseInt(process.env.ALERT_WORKER_CONCURRENCY || "5",
  * Process a single alert job
  */
 async function processAlert(job: Job<AlertJobData>): Promise<{ processed: boolean }> {
-  const { projectId, fingerprint, isNewGroup, level, message } = job.data;
+  const { projectId, fingerprint, isNewGroup, isRegression, level, message } = job.data;
 
   logger.debug("Processing alert job", {
     jobId: job.id,
@@ -27,8 +27,7 @@ async function processAlert(job: Job<AlertJobData>): Promise<{ processed: boolea
     isNewGroup,
   });
 
-  // Use existing alert service
-  await triggerAlertsForNewError(projectId, fingerprint, isNewGroup);
+  await triggerAlertsForNewError(projectId, fingerprint, isNewGroup, isRegression);
 
   // Publish SSE event for alert (fire-and-forget)
   const project = await db

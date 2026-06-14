@@ -13,6 +13,7 @@ export type AlertRuleConfig = {
   gitlabToken?: string;
   gitlabProjectId?: string;
   gitlabUrl?: string;
+  levelFilter?: string[];
 };
 
 export type AlertRule = {

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Mail, MessageSquare, AlertTriangle, RefreshCw, MessageCircle, Send, Github, GitBranch } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Mail, MessageSquare, AlertTriangle, RefreshCw, MessageCircle, Send, Github, GitBranch, Check } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -13,14 +13,38 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc/client";
 import { useCurrentProject } from "@/contexts/ProjectContext";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 
+type AlertChannel = "email" | "slack" | "webhook" | "discord" | "telegram" | "github" | "gitlab";
+type AlertRuleType = "new_error" | "regression" | "threshold";
+
+const CHANNEL_META: Record<AlertChannel, { name: string; type: AlertRuleType }> = {
+  email: { name: "Email Alerts", type: "new_error" },
+  slack: { name: "Slack Alerts", type: "new_error" },
+  discord: { name: "Discord Alerts", type: "new_error" },
+  telegram: { name: "Telegram Alerts", type: "new_error" },
+  github: { name: "GitHub Issues", type: "new_error" },
+  gitlab: { name: "GitLab Issues", type: "new_error" },
+  webhook: { name: "Webhook Alerts", type: "new_error" },
+};
+
+const ALERT_LEVELS = ["fatal", "error", "warning", "info", "debug"] as const;
+
 export function AlertsSection() {
   const t = useTranslations("settings.alerts");
+  const tCommon = useTranslations("common");
 
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
@@ -31,6 +55,10 @@ export function AlertsSection() {
   const [telegramEnabled, setTelegramEnabled] = useState(false);
   const [telegramBotToken, setTelegramBotToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
+  const [telegramRuleType, setTelegramRuleType] = useState<AlertRuleType>("new_error");
+  const [telegramLevelFilter, setTelegramLevelFilter] = useState<string[]>([]);
+  const [telegramThreshold, setTelegramThreshold] = useState("10");
+  const [telegramWindowMinutes, setTelegramWindowMinutes] = useState("60");
   const [githubEnabled, setGithubEnabled] = useState(false);
   const [githubToken, setGithubToken] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
@@ -39,7 +67,7 @@ export function AlertsSection() {
   const [gitlabProjectId, setGitlabProjectId] = useState("");
   const [gitlabUrl, setGitlabUrl] = useState("https://gitlab.com");
   const [threshold, setThreshold] = useState("10");
-  const [saving, setSaving] = useState(false);
+  const [savingChannel, setSavingChannel] = useState<string | null>(null);
 
   const { currentProjectId } = useCurrentProject();
   const { data: alertRules, refetch: refetchAlerts } = trpc.alerts.getRules.useQuery(
@@ -49,6 +77,58 @@ export function AlertsSection() {
 
   const createAlertMutation = trpc.alerts.createRule.useMutation();
   const updateAlertMutation = trpc.alerts.updateRule.useMutation();
+
+  const findRule = useCallback(
+    (channel: string) =>
+      alertRules?.find(
+        (r) => r.channel === channel && (channel !== "email" || r.type === "new_error"),
+      ),
+    [alertRules],
+  );
+
+  const saveChannel = useCallback(
+    async (
+      channel: AlertChannel,
+      enabled: boolean,
+      config: Record<string, unknown>,
+      overrides?: { type?: AlertRuleType; threshold?: number; windowMinutes?: number }
+    ) => {
+      if (!currentProjectId) return;
+      setSavingChannel(channel);
+      const rule = findRule(channel);
+      try {
+        if (rule) {
+          await updateAlertMutation.mutateAsync({
+            id: rule.id,
+            updates: {
+              enabled,
+              config,
+              ...(overrides?.type && { type: overrides.type }),
+              ...(overrides?.threshold !== undefined && { threshold: overrides.threshold }),
+              ...(overrides?.windowMinutes !== undefined && { windowMinutes: overrides.windowMinutes }),
+            },
+          });
+        } else {
+          await createAlertMutation.mutateAsync({
+            projectId: currentProjectId,
+            name: CHANNEL_META[channel].name,
+            type: overrides?.type ?? CHANNEL_META[channel].type,
+            channel,
+            config,
+            ...(overrides?.threshold !== undefined && { threshold: overrides.threshold }),
+            ...(overrides?.windowMinutes !== undefined && { windowMinutes: overrides.windowMinutes }),
+          });
+        }
+        await refetchAlerts();
+        toast.success(t("toastSaved"));
+      } catch {
+        toast.error(t("toastFailed"));
+      } finally {
+        setSavingChannel(null);
+      }
+    },
+    [currentProjectId, findRule, createAlertMutation, updateAlertMutation, refetchAlerts, t],
+  );
 
   useEffect(() => {
     if (alertRules) {
@@ -76,15 +156,19 @@ export function AlertsSection() {
         setTelegramEnabled(telegramRule.enabled);
         setTelegramBotToken(telegramRule.config?.telegramBotToken || "");
         setTelegramChatId(telegramRule.config?.telegramChatId || "");
+        setTelegramRuleType((telegramRule.type as AlertRuleType) || "new_error");
+        setTelegramLevelFilter(telegramRule.config?.levelFilter || []);
+        if (telegramRule.threshold) setTelegramThreshold(String(telegramRule.threshold));
+        if (telegramRule.windowMinutes) setTelegramWindowMinutes(String(telegramRule.windowMinutes));
       }
       if (githubRule) {
         setGithubEnabled(githubRule.enabled);
-        setGithubToken(""); // Never display stored token
+        setGithubToken("");
         setGithubRepo(githubRule.config?.githubRepo || "");
       }
       if (gitlabRule) {
         setGitlabEnabled(gitlabRule.enabled);
-        setGitlabToken(""); // Never display stored token
+        setGitlabToken("");
         setGitlabProjectId(gitlabRule.config?.gitlabProjectId || "");
         setGitlabUrl(gitlabRule.config?.gitlabUrl || "https://gitlab.com");
       }
@@ -94,149 +178,81 @@ export function AlertsSection() {
     }
   }, [alertRules]);
 
-  const saveSettings = async () => {
+  const saveThreshold = async () => {
     if (!currentProjectId) return;
-    setSaving(true);
+    setSavingChannel("threshold");
+    const existingRule = alertRules?.find((r) => r.type === "threshold");
     try {
-      const existingEmailRule = alertRules?.find((r) => r.channel === "email" && r.type === "new_error");
-      const existingSlackRule = alertRules?.find((r) => r.channel === "slack");
-      const existingDiscordRule = alertRules?.find((r) => r.channel === "discord");
-      const existingTelegramRule = alertRules?.find((r) => r.channel === "telegram");
-      const existingGithubRule = alertRules?.find((r) => r.channel === "github");
-      const existingGitlabRule = alertRules?.find((r) => r.channel === "gitlab");
-
-      if (emailEnabled && emailAddress) {
-        if (existingEmailRule) {
-          await updateAlertMutation.mutateAsync({
-            id: existingEmailRule.id,
-            updates: { enabled: true, config: { email: emailAddress } },
-          });
-        } else {
-          await createAlertMutation.mutateAsync({
-            projectId: currentProjectId,
-            name: "Email Alerts",
-            type: "new_error",
-            channel: "email",
-            config: { email: emailAddress },
-          });
-        }
-      } else if (existingEmailRule) {
-        await updateAlertMutation.mutateAsync({ id: existingEmailRule.id, updates: { enabled: false } });
+      if (existingRule) {
+        await updateAlertMutation.mutateAsync({
+          id: existingRule.id,
+          updates: { threshold: Number(threshold) },
+        });
+      } else {
+        await createAlertMutation.mutateAsync({
+          projectId: currentProjectId,
+          name: "Threshold Alert",
+          type: "threshold",
+          channel: "email",
+          config: {},
+          threshold: Number(threshold),
+        });
       }
-
-      if (slackEnabled && slackWebhook) {
-        if (existingSlackRule) {
-          await updateAlertMutation.mutateAsync({
-            id: existingSlackRule.id,
-            updates: { enabled: true, config: { slackWebhook } },
-          });
-        } else {
-          await createAlertMutation.mutateAsync({
-            projectId: currentProjectId,
-            name: "Slack Alerts",
-            type: "new_error",
-            channel: "slack",
-            config: { slackWebhook },
-          });
-        }
-      } else if (existingSlackRule) {
-        await updateAlertMutation.mutateAsync({ id: existingSlackRule.id, updates: { enabled: false } });
-      }
-
-      if (discordEnabled && discordWebhook) {
-        if (existingDiscordRule) {
-          await updateAlertMutation.mutateAsync({
-            id: existingDiscordRule.id,
-            updates: { enabled: true, config: { discordWebhook } },
-          });
-        } else {
-          await createAlertMutation.mutateAsync({
-            projectId: currentProjectId,
-            name: "Discord Alerts",
-            type: "new_error",
-            channel: "discord",
-            config: { discordWebhook },
-          });
-        }
-      } else if (existingDiscordRule) {
-        await updateAlertMutation.mutateAsync({ id: existingDiscordRule.id, updates: { enabled: false } });
-      }
-
-      if (telegramEnabled && telegramBotToken && telegramChatId) {
-        if (existingTelegramRule) {
-          await updateAlertMutation.mutateAsync({
-            id: existingTelegramRule.id,
-            updates: { enabled: true, config: { telegramBotToken, telegramChatId } },
-          });
-        } else {
-          await createAlertMutation.mutateAsync({
-            projectId: currentProjectId,
-            name: "Telegram Alerts",
-            type: "new_error",
-            channel: "telegram",
-            config: { telegramBotToken, telegramChatId },
-          });
-        }
-      } else if (existingTelegramRule) {
-        await updateAlertMutation.mutateAsync({ id: existingTelegramRule.id, updates: { enabled: false } });
-      }
-
-      if (githubEnabled && githubRepo) {
-        const githubConfig = githubToken
-          ? { githubToken, githubRepo }
-          : { githubRepo };
-        if (existingGithubRule) {
-          await updateAlertMutation.mutateAsync({
-            id: existingGithubRule.id,
-            updates: { enabled: true, config: githubConfig },
-          });
-        } else if (githubToken) {
-          await createAlertMutation.mutateAsync({
-            projectId: currentProjectId,
-            name: "GitHub Issues",
-            type: "new_error",
-            channel: "github",
-            config: { githubToken, githubRepo },
-          });
-        }
-      } else if (existingGithubRule) {
-        await updateAlertMutation.mutateAsync({ id: existingGithubRule.id, updates: { enabled: false } });
-      }
-
-      if (gitlabEnabled && gitlabProjectId) {
-        const gitlabConfig = gitlabToken
-          ? { gitlabToken, gitlabProjectId, gitlabUrl }
-          : { gitlabProjectId, gitlabUrl };
-        if (existingGitlabRule) {
-          await updateAlertMutation.mutateAsync({
-            id: existingGitlabRule.id,
-            updates: { enabled: true, config: gitlabConfig },
-          });
-        } else if (gitlabToken) {
-          await createAlertMutation.mutateAsync({
-            projectId: currentProjectId,
-            name: "GitLab Issues",
-            type: "new_error",
-            channel: "gitlab",
-            config: { gitlabToken, gitlabProjectId, gitlabUrl },
-          });
-        }
-      } else if (existingGitlabRule) {
-        await updateAlertMutation.mutateAsync({ id: existingGitlabRule.id, updates: { enabled: false } });
-      }
-
       await refetchAlerts();
       toast.success(t("toastSaved"));
     } catch {
       toast.error(t("toastFailed"));
     } finally {
-      setSaving(false);
+      setSavingChannel(null);
     }
   };
+
+  const SaveButton = ({ channel, disabled }: { channel: string; disabled?: boolean }) => (
+    <div className="flex justify-end pt-2">
+      <Button
+        size="sm"
+        disabled={disabled || savingChannel === channel}
+        onClick={() => {
+          switch (channel) {
+            case "email": return saveChannel("email", emailEnabled, { email: emailAddress });
+            case "slack": return saveChannel("slack", slackEnabled, { slackWebhook });
+            case "discord": return saveChannel("discord", discordEnabled, { discordWebhook });
+            case "telegram": return saveChannel(
+              "telegram",
+              telegramEnabled,
+              {
+                telegramBotToken,
+                telegramChatId,
+                ...(telegramLevelFilter.length > 0 && { levelFilter: telegramLevelFilter }),
+              },
+              {
+                type: telegramRuleType,
+                ...(telegramRuleType === "threshold" && {
+                  threshold: Number(telegramThreshold),
+                  windowMinutes: Number(telegramWindowMinutes),
+                }),
+              }
+            );
+            case "github": return saveChannel("github", githubEnabled, githubToken ? { githubToken, githubRepo } : { githubRepo });
+            case "gitlab": return saveChannel("gitlab", gitlabEnabled, gitlabToken ? { gitlabToken, gitlabProjectId, gitlabUrl } : { gitlabProjectId, gitlabUrl });
+            case "threshold": return saveThreshold();
+          }
+        }}
+      >
+        {savingChannel === channel ? (
+          <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Check className="mr-2 h-3.5 w-3.5" />
+        )}
+        {tCommon("save")}
+      </Button>
+    </div>
+  );
 
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Email */}
         <Card className="bg-gradient-to-t from-primary/5 to-card">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -265,9 +281,11 @@ export function AlertsSection() {
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <span className="text-muted-foreground">{t("emailDigestNote")}</span>
             </div>
+            <SaveButton channel="email" disabled={!emailAddress} />
           </CardContent>
         </Card>
 
+        {/* Slack */}
         <Card className="bg-gradient-to-t from-primary/5 to-card">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -292,13 +310,11 @@ export function AlertsSection() {
                 className="font-mono text-sm"
               />
             </div>
-            <Button variant="outline" className="w-full" disabled={!slackWebhook}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {t("slackTestConnection")}
-            </Button>
+            <SaveButton channel="slack" disabled={!slackWebhook} />
           </CardContent>
         </Card>
 
+        {/* Discord */}
         <Card className="bg-gradient-to-t from-primary/5 to-card">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -323,9 +339,11 @@ export function AlertsSection() {
                 className="font-mono text-sm"
               />
             </div>
+            <SaveButton channel="discord" disabled={!discordWebhook} />
           </CardContent>
         </Card>
 
+        {/* Telegram */}
         <Card className="bg-gradient-to-t from-primary/5 to-card">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -360,9 +378,73 @@ export function AlertsSection() {
                 className="font-mono text-sm"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label>Alert Type</Label>
+              <Select value={telegramRuleType} onValueChange={(v) => setTelegramRuleType(v as AlertRuleType)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new_error">New Error</SelectItem>
+                  <SelectItem value="regression">Regression</SelectItem>
+                  <SelectItem value="threshold">Spike (Threshold)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {telegramRuleType === "threshold" && (
+              <div className="flex items-center gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="tg-threshold">Threshold</Label>
+                  <Input
+                    id="tg-threshold"
+                    type="number"
+                    min="1"
+                    value={telegramThreshold}
+                    onChange={(e) => setTelegramThreshold(e.target.value)}
+                    className="w-20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="tg-window">Window (min)</Label>
+                  <Input
+                    id="tg-window"
+                    type="number"
+                    min="1"
+                    value={telegramWindowMinutes}
+                    onChange={(e) => setTelegramWindowMinutes(e.target.value)}
+                    className="w-20"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Level Filter</Label>
+              <p className="text-xs text-muted-foreground">Only alert for selected levels (leave empty for all)</p>
+              <div className="flex flex-wrap gap-3">
+                {ALERT_LEVELS.map((level) => (
+                  <label key={level} className="flex items-center gap-1.5 text-sm">
+                    <Checkbox
+                      checked={telegramLevelFilter.includes(level)}
+                      onCheckedChange={(checked) => {
+                        setTelegramLevelFilter((prev) =>
+                          checked ? [...prev, level] : prev.filter((l) => l !== level)
+                        );
+                      }}
+                    />
+                    {level}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <SaveButton channel="telegram" disabled={!telegramBotToken || !telegramChatId} />
           </CardContent>
         </Card>
 
+        {/* GitHub */}
         <Card className="bg-gradient-to-t from-primary/5 to-card">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -402,9 +484,11 @@ export function AlertsSection() {
                 className="font-mono text-sm"
               />
             </div>
+            <SaveButton channel="github" disabled={!githubRepo} />
           </CardContent>
         </Card>
 
+        {/* GitLab */}
         <Card className="bg-gradient-to-t from-primary/5 to-card">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -454,10 +538,12 @@ export function AlertsSection() {
                 className="font-mono text-sm"
               />
             </div>
+            <SaveButton channel="gitlab" disabled={!gitlabProjectId} />
           </CardContent>
         </Card>
       </div>
 
+      {/* Threshold */}
       <Card className="bg-gradient-to-t from-primary/5 to-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -467,25 +553,32 @@ export function AlertsSection() {
           <CardDescription>{t("thresholdCardDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
-            <Input
-              type="number"
-              min="1"
-              value={threshold}
-              onChange={(e) => setThreshold(e.target.value)}
-              className="w-24"
-            />
-            <span className="text-muted-foreground">{t("thresholdEventsPerHour")}</span>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Input
+                type="number"
+                min="1"
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-muted-foreground">{t("thresholdEventsPerHour")}</span>
+            </div>
+            <Button
+              size="sm"
+              disabled={savingChannel === "threshold"}
+              onClick={saveThreshold}
+            >
+              {savingChannel === "threshold" ? (
+                <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-3.5 w-3.5" />
+              )}
+              {tCommon("save")}
+            </Button>
           </div>
         </CardContent>
       </Card>
-
-      <div className="flex justify-end">
-        <Button onClick={saveSettings} disabled={saving}>
-          {saving && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-          {t("saveChanges")}
-        </Button>
-      </div>
     </>
   );
 }

@@ -45,6 +45,7 @@ export const create = async (c: AuthContext) => {
       gitlabToken: z.string().optional(),
       gitlabProjectId: z.string().optional(),
       gitlabUrl: z.string().url().optional(),
+      levelFilter: z.array(z.enum(["fatal", "error", "warning", "info", "debug"])).optional(),
     }),
   });
 
@@ -119,6 +120,7 @@ export const update = async (c: AuthContext) => {
         gitlabToken: z.string().optional(),
         gitlabProjectId: z.string().optional(),
         gitlabUrl: z.string().url().optional(),
+        levelFilter: z.array(z.enum(["fatal", "error", "warning", "info", "debug"])).optional(),
       })
       .optional(),
     enabled: z.boolean().optional(),
@@ -126,6 +128,28 @@ export const update = async (c: AuthContext) => {
 
   try {
     const input = schema.parse(await c.req.json());
+
+    if (input.channel && input.config) {
+      if (input.channel === "telegram" && (!input.config.telegramBotToken || !input.config.telegramChatId)) {
+        return c.json({ error: "Telegram channel requires bot token and chat ID" }, 400);
+      }
+      if (input.channel === "email" && !input.config.email) {
+        return c.json({ error: "Email channel requires email address" }, 400);
+      }
+      if (input.channel === "slack" && !input.config.slackWebhook) {
+        return c.json({ error: "Slack channel requires webhook URL" }, 400);
+      }
+      if (input.channel === "discord" && !input.config.discordWebhook) {
+        return c.json({ error: "Discord channel requires webhook URL" }, 400);
+      }
+      if (input.channel === "github" && (!input.config.githubToken || !input.config.githubRepo)) {
+        return c.json({ error: "GitHub channel requires token and repository" }, 400);
+      }
+      if (input.channel === "gitlab" && (!input.config.gitlabToken || !input.config.gitlabProjectId)) {
+        return c.json({ error: "GitLab channel requires token and project ID" }, 400);
+      }
+    }
+
     const result = await AlertService.update(userId, ruleId, input);
     return c.json(result);
   } catch (error: any) {

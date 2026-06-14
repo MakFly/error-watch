@@ -11,6 +11,7 @@ export type AlertRuleConfig = {
   gitlabToken?: string;
   gitlabProjectId?: string;
   gitlabUrl?: string; // default "https://gitlab.com"
+  levelFilter?: string[];
 };
 
 export type AlertRuleType = "new_error" | "threshold" | "regression" | "cron_missed";

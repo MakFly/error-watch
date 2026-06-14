@@ -158,6 +158,7 @@ export interface AlertJobData {
   projectId: string;
   fingerprint: string;
   isNewGroup: boolean;
+  isRegression: boolean;
   level: string;
   message: string;
 }

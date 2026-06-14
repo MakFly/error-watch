@@ -72,9 +72,10 @@ export async function deleteAlertRule(ruleId: string) {
 export async function triggerAlertsForNewError(
   projectId: string,
   fingerprint: string,
-  isNewGroup: boolean
+  isNewGroup: boolean,
+  isRegression: boolean = false
 ) {
-  logger.debug("Checking alerts for error", { projectId, fingerprint, isNewGroup });
+  logger.debug("Checking alerts for error", { projectId, fingerprint, isNewGroup, isRegression });
 
   // Get enabled rules for this project
   const rules = await db
@@ -111,11 +112,17 @@ export async function triggerAlertsForNewError(
       // Check if rule should trigger
       let shouldTrigger = false;
 
+      // Level filter: skip if the rule's config has a levelFilter and the group's level doesn't match
+      const levelFilter = (config as Record<string, unknown>).levelFilter as string[] | undefined;
+      if (levelFilter && levelFilter.length > 0 && !levelFilter.includes(group.level)) {
+        continue;
+      }
+
       if (rule.type === "new_error" && isNewGroup) {
-        // Trigger for new error groups only
+        shouldTrigger = true;
+      } else if (rule.type === "regression" && isRegression) {
         shouldTrigger = true;
       } else if (rule.type === "threshold" && rule.threshold && rule.windowMinutes) {
-        // Check if threshold exceeded in time window
         const windowStart = new Date(Date.now() - rule.windowMinutes * 60 * 1000);
         const recentEvents = await db
           .select()
@@ -123,18 +130,19 @@ export async function triggerAlertsForNewError(
           .where(
             and(
               eq(errorEvents.projectId, projectId),
+              eq(errorEvents.fingerprint, fingerprint),
               gt(errorEvents.createdAt, windowStart)
             )
           );
 
         if (recentEvents.length >= rule.threshold) {
-          // Check if we already sent a notification recently (avoid spam)
           const recentNotification = (await db
             .select()
             .from(notifications)
             .where(
               and(
                 eq(notifications.ruleId, rule.id),
+                eq(notifications.fingerprint, fingerprint),
                 gt(notifications.createdAt, windowStart)
               )
             ))[0];
@@ -217,11 +225,15 @@ export async function triggerAlertsForNewError(
         });
       } else if (rule.channel === "telegram" && config.telegramBotToken && config.telegramChatId) {
         result = await sendTelegramNotification(config.telegramBotToken, config.telegramChatId, {
+          alertType: rule.type,
+          level: group.level,
           projectName,
           errorMessage: group.message,
           errorFile: group.file,
           errorLine: group.line,
           eventCount: group.count,
+          threshold: rule.threshold ?? undefined,
+          windowMinutes: rule.windowMinutes ?? undefined,
           fingerprint,
           dashboardUrl: DASHBOARD_URL,
         });
@@ -420,26 +432,55 @@ async function sendDiscordNotification(
   }
 }
 
-// Telegram notification sender
+const ALERT_TYPE_LABELS: Record<string, { icon: string; label: string }> = {
+  new_error: { icon: "\u{1F6A8}", label: "New Error" },
+  regression: { icon: "\u{1F504}", label: "Regression" },
+  threshold: { icon: "\u{1F4C8}", label: "Spike Alert" },
+  cron_missed: { icon: "\u{23F0}", label: "Cron Alert" },
+};
+
+const LEVEL_ICONS: Record<string, string> = {
+  fatal: "\u{1F480}",
+  error: "\u{274C}",
+  warning: "\u{26A0}\u{FE0F}",
+  info: "\u{2139}\u{FE0F}",
+  debug: "\u{1F41B}",
+};
+
 async function sendTelegramNotification(
   botToken: string,
   chatId: string,
   data: {
+    alertType: string;
+    level: string;
     projectName: string;
     errorMessage: string;
     errorFile: string;
     errorLine: number;
     eventCount: number;
+    threshold?: number;
+    windowMinutes?: number;
     fingerprint: string;
     dashboardUrl: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const text = `*New Error in ${escapeMarkdown(data.projectName)}*\n\n` +
-      `*Error:* \`${escapeMarkdown(data.errorMessage)}\`\n` +
-      `*Location:* \`${escapeMarkdown(data.errorFile)}:${data.errorLine}\`\n` +
-      `*Events:* ${data.eventCount}\n\n` +
-      `[View Details](${data.dashboardUrl}/dashboard/issues/${data.fingerprint})`;
+    const meta = ALERT_TYPE_LABELS[data.alertType] ?? { icon: "\u{1F514}", label: "Alert" };
+    const levelIcon = LEVEL_ICONS[data.level] ?? "";
+    const esc = escapeMarkdownV2;
+
+    let text = `${meta.icon} *${esc(`[${meta.label}] ${data.projectName}`)}*\n\n`;
+    text += `${levelIcon} *Level:* \`${esc(data.level)}\`\n`;
+    text += `*Error:* \`${esc(data.errorMessage)}\`\n`;
+    text += `*Location:* \`${esc(data.errorFile)}:${data.errorLine}\`\n`;
+    text += `*Events:* ${data.eventCount}\n`;
+
+    if (data.alertType === "threshold" && data.threshold && data.windowMinutes) {
+      text += `*Threshold:* ${esc(`${data.threshold}+ events in ${data.windowMinutes}min`)}\n`;
+    }
+
+    const linkUrl = `${data.dashboardUrl}/dashboard/issues/${data.fingerprint}`;
+    text += `\n[View Details](${esc(linkUrl)})`;
 
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
@@ -447,7 +488,7 @@ async function sendTelegramNotification(
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        parse_mode: "Markdown",
+        parse_mode: "MarkdownV2",
         disable_web_page_preview: true,
       }),
     });
@@ -456,7 +497,7 @@ async function sendTelegramNotification(
       const body = await response.text();
       return { success: false, error: `HTTP ${response.status}: ${body}` };
     }
-    logger.info("Telegram notification sent");
+    logger.info("Telegram notification sent", { alertType: data.alertType });
     return { success: true };
   } catch (e) {
     const error = e instanceof Error ? e.message : "Unknown error";
@@ -465,8 +506,8 @@ async function sendTelegramNotification(
   }
 }
 
-function escapeMarkdown(text: string): string {
-  return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, "\\$&");
+function escapeMarkdownV2(text: string): string {
+  return text.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
 }
 
 // GitHub issue creator
@@ -663,6 +704,30 @@ export async function triggerAlertsForCronError(
           monitorName,
           monitorSlug,
           status,
+          dashboardUrl: DASHBOARD_URL,
+        });
+      } else if (rule.channel === "discord" && config.discordWebhook) {
+        const label = status === "missed" ? "Missed" : "Failed";
+        result = await sendDiscordNotification(config.discordWebhook, {
+          projectName,
+          errorMessage: `Cron Monitor ${label}: ${monitorName} (${monitorSlug})`,
+          errorFile: monitorSlug,
+          errorLine: 0,
+          eventCount: 0,
+          fingerprint: "",
+          dashboardUrl: DASHBOARD_URL,
+        });
+      } else if (rule.channel === "telegram" && config.telegramBotToken && config.telegramChatId) {
+        const label = status === "missed" ? "Missed" : "Failed";
+        result = await sendTelegramNotification(config.telegramBotToken, config.telegramChatId, {
+          alertType: "cron_missed",
+          level: "error",
+          projectName,
+          errorMessage: `Cron Monitor ${label}: ${monitorName} (${monitorSlug})`,
+          errorFile: monitorSlug,
+          errorLine: 0,
+          eventCount: 0,
+          fingerprint: "",
           dashboardUrl: DASHBOARD_URL,
         });
       } else {

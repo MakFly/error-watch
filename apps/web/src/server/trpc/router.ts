@@ -92,6 +92,18 @@ const groupsRouter = router({
       return api.groups.getById(input.fingerprint);
     }),
 
+  getIssueDetail: protectedProcedure
+    .input(
+      z.object({
+        fingerprint: z.string(),
+        page: z.number().positive().optional(),
+        limit: z.number().positive().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      return api.groups.getIssueDetail(input.fingerprint, input.page, input.limit);
+    }),
+
   getEvents: protectedProcedure
     .input(z.object({
       fingerprint: z.string(),
@@ -117,6 +129,30 @@ const groupsRouter = router({
       return api.groups.updateAssignment(input.fingerprint, input.assignedTo);
     }),
 
+  updatePriority: protectedProcedure
+    .input(z.object({
+      fingerprint: z.string(),
+      priority: z.enum(["low", "medium", "high"]),
+    }))
+    .mutation(async ({ input }) => {
+      return api.groups.updatePriority(input.fingerprint, input.priority);
+    }),
+
+  updateSnooze: protectedProcedure
+    .input(z.object({
+      fingerprint: z.string(),
+      until: z.string().datetime().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      return api.groups.updateSnooze(input.fingerprint, input.until);
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ fingerprint: z.string() }))
+    .mutation(async ({ input }) => {
+      return api.groups.delete(input.fingerprint);
+    }),
+
   // Resolve / reopen. The API attributes resolution to the authenticated user
   // (BetterAuth session); no userId needed in the input.
   updateStatus: protectedProcedure
@@ -132,6 +168,12 @@ const groupsRouter = router({
     .input(z.object({ fingerprint: z.string() }))
     .query(async ({ input }) => {
       return api.groups.getStatusHistory(input.fingerprint);
+    }),
+
+  getActivity: protectedProcedure
+    .input(z.object({ fingerprint: z.string() }))
+    .query(async ({ input }) => {
+      return api.groups.getActivity(input.fingerprint);
     }),
 
   getReleases: protectedProcedure
@@ -436,6 +478,7 @@ const alertsRouter = router({
         gitlabToken: z.string().optional(),
         gitlabProjectId: z.string().optional(),
         gitlabUrl: z.string().url().optional(),
+        levelFilter: z.array(z.enum(["fatal", "error", "warning", "info", "debug"])).optional(),
       }),
     }))
     .mutation(async ({ input }) => {
@@ -463,6 +506,7 @@ const alertsRouter = router({
           gitlabToken: z.string().optional(),
           gitlabProjectId: z.string().optional(),
           gitlabUrl: z.string().url().optional(),
+          levelFilter: z.array(z.enum(["fatal", "error", "warning", "info", "debug"])).optional(),
         }).optional(),
         enabled: z.boolean().optional(),
       }),
@@ -753,6 +797,15 @@ const performanceRouter = router({
     }))
     .query(async ({ input }) => {
       return api.performance.getEndpointDetail(input.projectId, input.name, input.dateRange);
+    }),
+
+  getWebVitals: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      dateRange: z.enum(["24h", "7d", "30d", "90d", "6m", "1y"]).optional(),
+    }))
+    .query(async ({ input }) => {
+      return api.performance.getWebVitals(input.projectId, input.dateRange);
     }),
 
 });

@@ -275,11 +275,14 @@ async function processEvent(job: Job<EventJobData>): Promise<{ fingerprint: stri
     `);
   }
 
+  const isRegression = !isNewGroup && priorStatus === "resolved";
+
   if (projectId) {
     await alertQueue.add("check-alerts", {
       projectId,
       fingerprint,
       isNewGroup,
+      isRegression,
       level,
       message,
     });
