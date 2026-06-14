@@ -14,12 +14,12 @@
     "seed": "tsx --env-file=../../.env src/db/seed.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.7",
+    "@hono/node-server": "^1.19.14",
     "better-auth": "^1.4.8",
     "bullmq": "^5.66.3",
     "cron-parser": "^5.5.0",
     "drizzle-orm": "^0.45.1",
-    "hono": "^4.0.0",
+    "hono": "^4.12.25",
     "ioredis": "^5.8.2",
     "pino": "^9.6.0",
     "postgres": "^3.4.5",
