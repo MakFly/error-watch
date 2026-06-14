@@ -102,6 +102,7 @@ export interface ServerStats {
   errorRate: number;
   errorCount: number;
   avgDuration: number;
+  p95Duration: number;
 }
 
 export interface EndpointImpact {
@@ -183,6 +184,20 @@ export interface QueueSummary {
     errorRate: number;
     avgDuration: number;
   };
+}
+
+// Web Vitals
+export interface WebVitalMetric {
+  name: string;
+  count: number;
+  p75: number;
+  p95: number;
+  rating: "good" | "needs-improvement" | "poor" | "unknown";
+}
+
+export interface WebVitalsResponse {
+  metrics: Record<string, WebVitalMetric>;
+  totalSamples: number;
 }
 
 // Endpoint detail

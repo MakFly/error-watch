@@ -12,6 +12,7 @@ import { MetricRibbon } from "@/components/performance/MetricRibbon";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { TransactionDetail } from "@/components/performance";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -20,10 +21,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Database, Timer, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   PerformanceDateRange,
+  EndpointDetailSummary,
   EndpointTopQuery,
   EndpointRecentTransaction,
 } from "@/server/api/types";
@@ -37,6 +39,90 @@ function durationCls(ms: number): string {
   if (ms >= 1000) return "text-status-critical";
   if (ms >= 300) return "text-status-warning";
   return "text-foreground";
+}
+
+function EndpointContextPanel({
+  endpoint,
+  topQueries,
+  recentTransactions,
+}: {
+  endpoint: EndpointDetailSummary;
+  topQueries: EndpointTopQuery[];
+  recentTransactions: EndpointRecentTransaction[];
+}) {
+  const estimatedTotalTime = endpoint.avgDuration * endpoint.count;
+  const totalQueryTime = topQueries.reduce((sum, query) => sum + query.totalDuration, 0);
+  const dbShare = estimatedTotalTime > 0 ? (totalQueryTime / estimatedTotalTime) * 100 : 0;
+  const repeatedQueries = topQueries.filter((query) => query.count > 1).length;
+  const latestTransaction = recentTransactions[0];
+  const failedSamples = recentTransactions.filter(
+    (transaction) => transaction.status === "error"
+  ).length;
+  const slowestQuery = topQueries[0];
+
+  const items = [
+    {
+      label: "Estimated request time",
+      value: formatMs(estimatedTotalTime),
+      detail: `${endpoint.count.toLocaleString()} request${endpoint.count > 1 ? "s" : ""} x ${formatMs(endpoint.avgDuration)} avg`,
+      icon: Timer,
+    },
+    {
+      label: "DB time in top queries",
+      value: totalQueryTime > 0 ? formatMs(totalQueryTime) : "none",
+      detail:
+        totalQueryTime > 0
+          ? `${Math.min(dbShare, 999).toFixed(dbShare >= 10 ? 0 : 1)}% of estimated time`
+          : "No SQL spans captured for this endpoint",
+      icon: Database,
+    },
+    {
+      label: "Repeated query shapes",
+      value: repeatedQueries.toLocaleString(),
+      detail: slowestQuery
+        ? `${slowestQuery.count}x: ${slowestQuery.description || "unknown query"}`
+        : "No repeated query visible",
+      icon: Workflow,
+    },
+    {
+      label: "Recent failed samples",
+      value: failedSamples.toLocaleString(),
+      detail: latestTransaction
+        ? `Latest sample ${new Date(latestTransaction.startTimestamp).toLocaleString()}`
+        : "No recent sample in this range",
+      icon: AlertTriangle,
+      alert: failedSamples > 0 || endpoint.errorCount > 0,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {items.map(({ label, value, detail, icon: Icon, alert }) => (
+        <Card key={label} className="shadow-none">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {label}
+            </CardTitle>
+            <Icon className={alert ? "h-4 w-4 text-red-400" : "h-4 w-4 text-muted-foreground"} />
+          </CardHeader>
+          <CardContent>
+            <div
+              className={
+                alert
+                  ? "font-mono text-xl font-semibold text-red-400"
+                  : "font-mono text-xl font-semibold"
+              }
+            >
+              {value}
+            </div>
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground" title={detail}>
+              {detail}
+            </p>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
 }
 
 export default function RequestDetailPage() {
@@ -88,16 +174,20 @@ function EndpointView({ baseUrl, routeName }: { baseUrl: string; routeName: stri
   if (projectLoading) return null;
 
   const endpoint = detail?.endpoint;
+  const topQueries = detail?.topQueries ?? [];
+  const recentTransactions = detail?.recentTransactions ?? [];
 
   const metrics = endpoint
     ? [
         { label: "Throughput", value: endpoint.count.toLocaleString(), sub: "total" },
+        { label: "Avg", value: formatMs(endpoint.avgDuration) },
         { label: "p50", value: formatMs(endpoint.p50) },
         { label: "p95", value: formatMs(endpoint.p95) },
-        { label: "p99", value: formatMs(endpoint.p99) },
+        { label: "Max", value: formatMs(endpoint.maxDuration) },
         {
-          label: "Error rate",
+          label: "Errors",
           value: `${endpoint.errorRate.toFixed(2)}%`,
+          sub: `${endpoint.errorCount.toLocaleString()} failed`,
           alert: endpoint.errorRate > 5,
         },
       ]
@@ -120,7 +210,27 @@ function EndpointView({ baseUrl, routeName }: { baseUrl: string; routeName: stri
         onDateRangeChange={setDateRange}
       />
 
+      {!detailLoading && !endpoint ? (
+        <Card className="border-dashed shadow-none">
+          <CardContent className="py-8">
+            <p className="text-sm font-medium">No transactions for this endpoint in this range</p>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              The endpoint name exists in the URL, but no matching APM transaction was found for the
+              selected period. Switch back to 24h or regenerate sample traffic.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <MetricRibbon metrics={metrics} isLoading={detailLoading} />
+
+      {endpoint ? (
+        <EndpointContextPanel
+          endpoint={endpoint}
+          topQueries={topQueries}
+          recentTransactions={recentTransactions}
+        />
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ThroughputChart
@@ -138,7 +248,7 @@ function EndpointView({ baseUrl, routeName }: { baseUrl: string; routeName: stri
       <div className="overflow-hidden rounded-xl border border-dashboard-border bg-dashboard-surface/30">
         <div className="border-b border-dashboard-border px-4 py-3">
           <h2 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-            Top DB queries
+            Top DB queries by total time
           </h2>
         </div>
         <Table>
@@ -151,20 +261,20 @@ function EndpointView({ baseUrl, routeName }: { baseUrl: string; routeName: stri
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(detail?.topQueries ?? []).length === 0 ? (
+            {topQueries.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={4}
                   className="py-8 text-center text-sm text-muted-foreground"
                 >
-                  No database queries captured for this endpoint
+                  No database spans captured for this endpoint in this range
                 </TableCell>
               </TableRow>
             ) : (
-              (detail?.topQueries ?? []).map((q: EndpointTopQuery, i: number) => (
+              topQueries.map((q: EndpointTopQuery, i: number) => (
                 <TableRow key={`${q.description}-${i}`}>
                   <TableCell
-                    className="max-w-[500px] truncate font-mono text-xs"
+                    className="max-w-[640px] whitespace-normal break-words font-mono text-xs leading-relaxed"
                     title={q.description}
                   >
                     {q.description}
@@ -193,7 +303,7 @@ function EndpointView({ baseUrl, routeName }: { baseUrl: string; routeName: stri
       <div className="overflow-hidden rounded-xl border border-dashboard-border bg-dashboard-surface/30">
         <div className="border-b border-dashboard-border px-4 py-3">
           <h2 className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-            Recent transactions
+            Recent transaction samples
           </h2>
         </div>
         <Table>
@@ -205,7 +315,7 @@ function EndpointView({ baseUrl, routeName }: { baseUrl: string; routeName: stri
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(detail?.recentTransactions ?? []).length === 0 ? (
+            {recentTransactions.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={3}
@@ -215,7 +325,7 @@ function EndpointView({ baseUrl, routeName }: { baseUrl: string; routeName: stri
                 </TableCell>
               </TableRow>
             ) : (
-              (detail?.recentTransactions ?? []).map((t: EndpointRecentTransaction) => (
+              recentTransactions.map((t: EndpointRecentTransaction) => (
                 <TableRow key={t.id}>
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     <Link

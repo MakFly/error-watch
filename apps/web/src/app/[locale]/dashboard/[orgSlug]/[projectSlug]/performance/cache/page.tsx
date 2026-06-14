@@ -15,12 +15,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { cn } from "@/lib/utils";
+import { formatMs } from "@/lib/format-duration";
 import type { PerformanceDateRange } from "@/server/api/types";
-
-function formatMs(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
-}
 
 function hitRateCls(rate: number): string {
   if (rate >= 90) return "text-status-healthy";

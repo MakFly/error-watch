@@ -2,6 +2,13 @@
 
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useFormatRel } from "./use-format-rel";
 
 interface OccurrenceChartProps {
@@ -21,9 +28,28 @@ function formatDate(date: string | Date): string {
   });
 }
 
-function Sparkline({ data, className }: { data: number[]; className?: string }) {
-  if (data.length === 0) return null;
+function formatTooltipDate(dateValue: string): string {
+  if (!dateValue) return "No date";
 
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(`${dateValue}T00:00:00.000Z`));
+}
+
+function Sparkline({
+  timeline,
+  className,
+}: {
+  timeline: Array<{ date: string; count: number }>;
+  className?: string;
+}) {
+  if (timeline.length === 0) return null;
+
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const activePoint = activeIndex !== null ? timeline[activeIndex] : null;
+  const data = timeline.map((point) => point.count);
   const max = Math.max(...data, 1);
   const width = 100;
   const height = 28;
@@ -40,23 +66,57 @@ function Sparkline({ data, className }: { data: number[]; className?: string }) 
   const fillPoints = `${padding},${height - padding} ${points} ${width - padding},${height - padding}`;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className={cn("h-7 w-full", className)} aria-hidden>
-      <defs>
-        <linearGradient id="issue-sparkline" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={fillPoints} fill="url(#issue-sparkline)" className="text-primary" />
-      <polyline
-        points={points}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        className="text-primary/80"
-      />
-    </svg>
+    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+      <Tooltip open={activePoint !== null}>
+        <TooltipTrigger asChild>
+          <div
+            className={cn("relative h-7 w-full text-primary", className)}
+            onPointerLeave={() => setActiveIndex(null)}
+          >
+            <svg viewBox={`0 0 ${width} ${height}`} className="h-7 w-full" aria-hidden>
+              <defs>
+                <linearGradient id="issue-sparkline" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <polygon points={fillPoints} fill="url(#issue-sparkline)" />
+              <polyline
+                points={points}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                className="text-primary/80"
+              />
+            </svg>
+            <div className="absolute inset-0 flex">
+              {timeline.map((point, index) => (
+                <button
+                  key={`${point.date}-${index}`}
+                  type="button"
+                  className="h-full flex-1 cursor-default rounded-sm outline-none focus-visible:bg-primary/10"
+                  aria-label={`${point.count} occurrences on ${formatTooltipDate(point.date)}`}
+                  onPointerEnter={() => setActiveIndex(index)}
+                  onFocus={() => setActiveIndex(index)}
+                  onBlur={() => setActiveIndex(null)}
+                />
+              ))}
+            </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6}>
+          {activePoint && (
+            <>
+              <div className="font-medium">{formatTooltipDate(activePoint.date)}</div>
+              <div className="text-xs">
+                {activePoint.count.toLocaleString()} {activePoint.count === 1 ? "occurrence" : "occurrences"}
+              </div>
+            </>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -71,8 +131,7 @@ export function OccurrenceChart({
 }: OccurrenceChartProps) {
   const t = useTranslations("issueDetail.occurrenceChart");
   const formatRel = useFormatRel();
-  const sparklineData = timeline.map((point) => point.count);
-  const periodTotal = sparklineData.reduce((a, b) => a + b, 0);
+  const periodTotal = timeline.reduce((total, point) => total + point.count, 0);
 
   if (variant === "compact") {
     return (
@@ -83,8 +142,8 @@ export function OccurrenceChart({
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">{t("occurrences")}</p>
         </div>
-        <div className="text-primary">
-          <Sparkline data={sparklineData} />
+        <div>
+          <Sparkline timeline={timeline} />
           <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
             <span>{t("last30days")}</span>
             <span className="tabular-nums">
@@ -142,7 +201,7 @@ export function OccurrenceChart({
               {periodTotal.toLocaleString()} {t("events")}
             </span>
           </div>
-          <Sparkline data={sparklineData} />
+          <Sparkline timeline={timeline} />
         </div>
       </div>
     </div>

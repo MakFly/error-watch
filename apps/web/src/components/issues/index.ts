@@ -1,5 +1,6 @@
 export { IssueRow } from "./IssueRow";
 export { FiltersRow } from "./FiltersRow";
+export { FlareErrorsList } from "./FlareErrorsList";
 export { IssuesTable, EmptyState, ErrorState } from "./IssuesTable";
 export { SignalProfile } from "./SignalProfile";
 export { SignalTrace } from "./SignalTrace";

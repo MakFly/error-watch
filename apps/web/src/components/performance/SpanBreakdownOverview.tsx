@@ -3,12 +3,8 @@
 import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatMs } from "@/lib/format-duration";
 import type { SpanOpSummary } from "@/server/api/types/performance";
-
-function formatDuration(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
-}
 
 interface SpanBreakdownOverviewProps {
   data: SpanOpSummary[];
@@ -61,7 +57,7 @@ export function SpanBreakdownOverview({ data, isLoading }: SpanBreakdownOverview
                   />
                 </div>
                 <span className="w-[60px] shrink-0 text-right text-xs font-mono">
-                  {formatDuration(op.totalDuration)}
+                  {formatMs(op.totalDuration)}
                 </span>
                 <span className="w-[40px] shrink-0 text-right text-xs text-muted-foreground">
                   {pct.toFixed(0)}%

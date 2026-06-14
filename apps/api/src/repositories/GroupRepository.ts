@@ -1,6 +1,6 @@
 import { eq, gt, desc, inArray, and, sql, ilike, or, lt } from "drizzle-orm";
 import { db } from "../db/connection";
-import { errorGroups, errorEvents, errorGroupStatusEvents } from "../db/schema";
+import { errorGroups, errorEvents, errorGroupStatusEvents, errorGroupActivityEvents } from "../db/schema";
 
 export interface CursorPaginationParams {
   cursor?: string; // Base64 encoded cursor (lastSeen timestamp + fingerprint)
@@ -104,6 +104,7 @@ export const GroupRepository = {
     // 'all' opts out of any status filtering.
     if (!filters?.status || filters.status === "unresolved") {
       conditions.push(eq(errorGroups.status, "unresolved"));
+      conditions.push(or(sql`${errorGroups.snoozedUntil} IS NULL`, lt(errorGroups.snoozedUntil, new Date())));
     } else if (filters.status === "resolved") {
       conditions.push(eq(errorGroups.status, "resolved"));
     }
@@ -313,6 +314,10 @@ export const GroupRepository = {
       lastSeen: row.last_seen,
       assignedTo: row.assigned_to,
       assignedAt: row.assigned_at,
+      usersAffected: row.users_affected ?? 0,
+      priority: row.priority ?? "medium",
+      snoozedUntil: row.snoozed_until ?? null,
+      snoozedBy: row.snoozed_by ?? null,
       mergedInto: row.merged_into,
       exceptionType: row.exception_type,
       exceptionValue: row.exception_value,
@@ -359,6 +364,7 @@ export const GroupRepository = {
     // status semantics for consistency.
     if (!filters?.status || filters.status === "unresolved") {
       conditions.push(eq(errorGroups.status, "unresolved"));
+      conditions.push(or(sql`${errorGroups.snoozedUntil} IS NULL`, lt(errorGroups.snoozedUntil, new Date())));
     } else if (filters.status === "resolved") {
       conditions.push(eq(errorGroups.status, "resolved"));
     }
@@ -496,6 +502,10 @@ export const GroupRepository = {
       lastSeen: row.last_seen,
       assignedTo: row.assigned_to,
       assignedAt: row.assigned_at,
+      usersAffected: row.users_affected ?? 0,
+      priority: row.priority ?? "medium",
+      snoozedUntil: row.snoozed_until ?? null,
+      snoozedBy: row.snoozed_by ?? null,
       mergedInto: row.merged_into,
       exceptionType: row.exception_type,
       exceptionValue: row.exception_value,
@@ -529,15 +539,100 @@ export const GroupRepository = {
   findByFingerprint: (fingerprint: string) =>
     db.select().from(errorGroups).where(eq(errorGroups.fingerprint, fingerprint)).then(rows => rows[0]),
 
-  updateAssignment: (fingerprint: string, assignedTo: string | null) =>
-    db
-      .update(errorGroups)
-      .set({
-        assignedTo,
-        assignedAt: assignedTo ? new Date() : null,
-      })
-      .where(eq(errorGroups.fingerprint, fingerprint))
-      .returning(),
+  updateAssignment: async (fingerprint: string, assignedTo: string | null, userId: string) => {
+    return db.transaction(async (tx) => {
+      const [prev] = await tx
+        .select({ assignedTo: errorGroups.assignedTo })
+        .from(errorGroups)
+        .where(eq(errorGroups.fingerprint, fingerprint))
+        .for("update");
+
+      const updated = await tx
+        .update(errorGroups)
+        .set({
+          assignedTo,
+          assignedAt: assignedTo ? new Date() : null,
+        })
+        .where(eq(errorGroups.fingerprint, fingerprint))
+        .returning();
+
+      if (prev && prev.assignedTo !== assignedTo) {
+        await tx.insert(errorGroupActivityEvents).values({
+          id: crypto.randomUUID(),
+          fingerprint,
+          type: "assignment",
+          actorUserId: userId,
+          fromValue: { assignedTo: prev.assignedTo },
+          toValue: { assignedTo },
+        });
+      }
+
+      return updated;
+    });
+  },
+
+  updatePriority: async (fingerprint: string, priority: "low" | "medium" | "high", userId: string) => {
+    return db.transaction(async (tx) => {
+      const [prev] = await tx
+        .select({ priority: errorGroups.priority })
+        .from(errorGroups)
+        .where(eq(errorGroups.fingerprint, fingerprint))
+        .for("update");
+
+      const updated = await tx
+        .update(errorGroups)
+        .set({ priority })
+        .where(eq(errorGroups.fingerprint, fingerprint))
+        .returning();
+
+      if (prev && prev.priority !== priority) {
+        await tx.insert(errorGroupActivityEvents).values({
+          id: crypto.randomUUID(),
+          fingerprint,
+          type: "priority",
+          actorUserId: userId,
+          fromValue: { priority: prev.priority },
+          toValue: { priority },
+        });
+      }
+
+      return updated;
+    });
+  },
+
+  updateSnooze: async (fingerprint: string, until: Date | null, userId: string) => {
+    return db.transaction(async (tx) => {
+      const [prev] = await tx
+        .select({ snoozedUntil: errorGroups.snoozedUntil, snoozedBy: errorGroups.snoozedBy })
+        .from(errorGroups)
+        .where(eq(errorGroups.fingerprint, fingerprint))
+        .for("update");
+
+      const updated = await tx
+        .update(errorGroups)
+        .set({
+          snoozedUntil: until,
+          snoozedBy: until ? userId : null,
+        })
+        .where(eq(errorGroups.fingerprint, fingerprint))
+        .returning();
+
+      const previousIso = prev?.snoozedUntil?.toISOString() ?? null;
+      const nextIso = until?.toISOString() ?? null;
+      if (prev && previousIso !== nextIso) {
+        await tx.insert(errorGroupActivityEvents).values({
+          id: crypto.randomUUID(),
+          fingerprint,
+          type: "snooze",
+          actorUserId: userId,
+          fromValue: { until: previousIso, by: prev.snoozedBy },
+          toValue: { until: nextIso, by: until ? userId : null },
+        });
+      }
+
+      return updated;
+    });
+  },
 
   // Resolve / reopen an issue. When transitioning to 'resolved' we stamp
   // who did it and when; reopening clears that attribution so the next
@@ -574,6 +669,15 @@ export const GroupRepository = {
           actorUserId: userId,
           reason: "manual",
         });
+        await tx.insert(errorGroupActivityEvents).values({
+          id: crypto.randomUUID(),
+          fingerprint,
+          type: "status",
+          actorUserId: userId,
+          fromValue: { status: prev.status },
+          toValue: { status },
+          metadata: { reason: "manual" },
+        });
       }
 
       return updated;
@@ -587,6 +691,16 @@ export const GroupRepository = {
       .from(errorGroupStatusEvents)
       .where(eq(errorGroupStatusEvents.fingerprint, fingerprint))
       .orderBy(desc(errorGroupStatusEvents.createdAt)),
+
+  getActivity: (fingerprint: string) =>
+    db
+      .select()
+      .from(errorGroupActivityEvents)
+      .where(eq(errorGroupActivityEvents.fingerprint, fingerprint))
+      .orderBy(desc(errorGroupActivityEvents.createdAt)),
+
+  delete: (fingerprint: string) =>
+    db.delete(errorGroups).where(eq(errorGroups.fingerprint, fingerprint)).returning(),
 
   merge: async (parentFingerprint: string, childFingerprints: string[]) => {
     // Set mergedInto on children

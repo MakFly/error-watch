@@ -7,11 +7,13 @@ import { Hono } from "hono";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type IssueStatus = "open" | "resolved" | "ignored" | "snoozed";
+type IssuePriority = "low" | "medium" | "high";
 
 interface Group {
   fingerprint: string;
   projectId: string | null;
   status: IssueStatus;
+  priority?: IssuePriority;
 }
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -127,9 +129,9 @@ function buildGroupApp(opts: {
   app.patch("/groups/:fingerprint/snooze", async (c) => {
     const uid = (c as any).get("userId");
     const fingerprint = c.req.param("fingerprint");
-    const { until } = (await c.req.json()) as { until: string };
+    const { until } = (await c.req.json()) as { until: string | null };
 
-    if (!until) return c.json({ error: "until date required" }, 400);
+    if (until !== null && typeof until !== "string") return c.json({ error: "until must be an ISO string or null" }, 400);
 
     const group = getById(fingerprint);
     if (!group) return c.json({ error: "Group not found" }, 404);
@@ -138,6 +140,51 @@ function buildGroupApp(opts: {
     }
 
     return c.json({ fingerprint, snoozedUntil: until });
+  });
+
+  // PATCH /groups/:fingerprint/priority
+  app.patch("/groups/:fingerprint/priority", async (c) => {
+    const uid = (c as any).get("userId");
+    const fingerprint = c.req.param("fingerprint");
+    const { priority } = (await c.req.json()) as { priority: IssuePriority };
+
+    if (!["low", "medium", "high"].includes(priority)) return c.json({ error: "Invalid priority" }, 400);
+
+    const group = getById(fingerprint);
+    if (!group) return c.json({ error: "Group not found" }, 404);
+    if (group.projectId && !verifyAccess(group.projectId, uid)) {
+      return c.json({ error: "Forbidden: You don't have access to this project" }, 403);
+    }
+
+    return c.json({ fingerprint, priority });
+  });
+
+  // DELETE /groups/:fingerprint
+  app.delete("/groups/:fingerprint", async (c) => {
+    const uid = (c as any).get("userId");
+    const fingerprint = c.req.param("fingerprint");
+
+    const group = getById(fingerprint);
+    if (!group) return c.json({ error: "Group not found" }, 404);
+    if (group.projectId && !verifyAccess(group.projectId, uid)) {
+      return c.json({ error: "Forbidden: You don't have access to this project" }, 403);
+    }
+
+    return c.json({ success: true });
+  });
+
+  // GET /groups/:fingerprint/activity
+  app.get("/groups/:fingerprint/activity", async (c) => {
+    const uid = (c as any).get("userId");
+    const fingerprint = c.req.param("fingerprint");
+
+    const group = getById(fingerprint);
+    if (!group) return c.json({ error: "Group not found" }, 404);
+    if (group.projectId && !verifyAccess(group.projectId, uid)) {
+      return c.json({ error: "Forbidden: You don't have access to this project" }, 403);
+    }
+
+    return c.json([{ id: "evt-1", fingerprint, type: "priority" }]);
   });
 
   return app;
@@ -269,6 +316,72 @@ describe("GroupController - snooze", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ until }),
     });
+    expect(res.status).toBe(403);
+  });
+
+  test("allows unsnooze when user has project access", async () => {
+    const app = buildGroupApp({ groupsByFingerprint: GROUPS, accessMap: ACCESS_MAP });
+    const res = await app.request("/groups/fp-owned/snooze", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ until: null }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.snoozedUntil).toBe(null);
+  });
+});
+
+describe("GroupController - priority", () => {
+  test("allows priority update when user has project access", async () => {
+    const app = buildGroupApp({ groupsByFingerprint: GROUPS, accessMap: ACCESS_MAP });
+    const res = await app.request("/groups/fp-owned/priority", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority: "high" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.priority).toBe("high");
+  });
+
+  test("returns 403 when user lacks access to the group's project", async () => {
+    const app = buildGroupApp({ groupsByFingerprint: GROUPS, accessMap: ACCESS_MAP });
+    const res = await app.request("/groups/fp-other/priority", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority: "high" }),
+    });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("GroupController - delete", () => {
+  test("allows delete when user has project access", async () => {
+    const app = buildGroupApp({ groupsByFingerprint: GROUPS, accessMap: ACCESS_MAP });
+    const res = await app.request("/groups/fp-owned", { method: "DELETE" });
+    expect(res.status).toBe(200);
+  });
+
+  test("returns 403 when user lacks access to the group's project", async () => {
+    const app = buildGroupApp({ groupsByFingerprint: GROUPS, accessMap: ACCESS_MAP });
+    const res = await app.request("/groups/fp-other", { method: "DELETE" });
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("GroupController - activity", () => {
+  test("allows activity read when user has project access", async () => {
+    const app = buildGroupApp({ groupsByFingerprint: GROUPS, accessMap: ACCESS_MAP });
+    const res = await app.request("/groups/fp-owned/activity");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body[0].type).toBe("priority");
+  });
+
+  test("returns 403 when user lacks access to the group's project", async () => {
+    const app = buildGroupApp({ groupsByFingerprint: GROUPS, accessMap: ACCESS_MAP });
+    const res = await app.request("/groups/fp-other/activity");
     expect(res.status).toBe(403);
   });
 });

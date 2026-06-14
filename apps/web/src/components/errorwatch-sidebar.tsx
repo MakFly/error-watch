@@ -9,7 +9,6 @@ import {
   Settings,
   HelpCircle,
   LayoutDashboard,
-  Wrench,
   Terminal,
   MoreHorizontal,
 } from "lucide-react";
@@ -52,8 +51,8 @@ export function ErrorWatchSidebar({
 
   // Build navigation, Flare/Sentry-style: a short PRIMARY group (the 3 product
   // pillars + dashboard) and a collapsed "More" group for everything secondary.
-  //   Primary = Dashboard, Errors, Performance, Logs
-  //   More    = Replays, Stats, Crons, Infrastructure (collapsed by default)
+  //   Primary = Dashboard, Errors, Logs, Performance
+  //   More    = Stats, Infrastructure (collapsed by default)
   const { navPrimary, navMore } = React.useMemo(() => {
     if (!currentOrgSlug) {
       return {
@@ -86,9 +85,7 @@ export function ErrorWatchSidebar({
     }
 
     const moreActive =
-      pathname.startsWith(`${baseUrl}/replays`) ||
       pathname.startsWith(`${baseUrl}/stats`) ||
-      pathname.startsWith(`${baseUrl}/crons`) ||
       pathname.startsWith(`${baseUrl}/infrastructure`);
 
     return {
@@ -106,6 +103,12 @@ export function ErrorWatchSidebar({
           isActive: pathname.startsWith(`${baseUrl}/issues`),
         },
         {
+          title: t("logs"),
+          url: `${baseUrl}/logs`,
+          icon: Terminal,
+          isActive: pathname.startsWith(`${baseUrl}/logs`),
+        },
+        {
           title: t("performance"),
           url: `${baseUrl}/performance`,
           icon: Gauge,
@@ -116,13 +119,8 @@ export function ErrorWatchSidebar({
             { title: t("cache"), url: `${baseUrl}/performance/cache`, isActive: pathname === `${baseUrl}/performance/cache` },
             { title: t("http"), url: `${baseUrl}/performance/http`, isActive: pathname === `${baseUrl}/performance/http` },
             { title: t("queues"), url: `${baseUrl}/performance/queues`, isActive: pathname === `${baseUrl}/performance/queues` },
+            { title: t("webVitals"), url: `${baseUrl}/performance/vitals`, isActive: pathname === `${baseUrl}/performance/vitals` },
           ],
-        },
-        {
-          title: t("logs"),
-          url: `${baseUrl}/logs`,
-          icon: Terminal,
-          isActive: pathname.startsWith(`${baseUrl}/logs`),
         },
       ],
       navMore: [
@@ -132,17 +130,13 @@ export function ErrorWatchSidebar({
           icon: MoreHorizontal,
           isActive: moreActive,
           children: [
-            { title: t("replays"), url: `${baseUrl}/replays`, isActive: pathname.startsWith(`${baseUrl}/replays`) },
             { title: t("stats"), url: `${baseUrl}/stats`, isActive: pathname.startsWith(`${baseUrl}/stats`) },
-            { title: t("crons"), url: `${baseUrl}/crons`, isActive: pathname.startsWith(`${baseUrl}/crons`) },
             { title: t("infrastructure"), url: `${baseUrl}/infrastructure`, isActive: pathname.startsWith(`${baseUrl}/infrastructure`) },
           ],
         },
       ],
     };
   }, [currentOrgSlug, baseUrl, pathname, t]);
-
-  const isDev = process.env.NODE_ENV !== "production";
 
   const navSecondary = React.useMemo(() => {
     // Settings and Help require project context
@@ -162,16 +156,9 @@ export function ErrorWatchSidebar({
       },
     ];
 
-    if (isDev) {
-      items.push({
-        title: t("admin"),
-        url: `${baseUrl}/admin`,
-        icon: Wrench,
-      });
-    }
 
     return items;
-  }, [baseUrl, isDev, t]);
+  }, [baseUrl, t]);
 
   const user = React.useMemo(
     () => ({
@@ -228,7 +215,7 @@ export function ErrorWatchSidebar({
         <SidebarSeparator />
 
         <NavMain items={navPrimary} />
-        <NavMain items={navMore} label={t("groups.more")} />
+        <NavMain items={navMore} />
 
         <NavSecondary items={navSecondary} label={t("groups.project")} className="mt-auto" />
       </SidebarContent>

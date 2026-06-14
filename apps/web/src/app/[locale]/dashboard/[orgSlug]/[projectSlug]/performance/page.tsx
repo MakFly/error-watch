@@ -9,6 +9,8 @@ import { usePerformanceQueries } from "@/hooks/usePerformanceQueries";
 import { MetricRibbon } from "@/components/performance/MetricRibbon";
 import { ThroughputChart } from "@/components/performance/ThroughputChart";
 import { DurationChart } from "@/components/performance/DurationChart";
+import { SpanBreakdownOverview } from "@/components/performance/SpanBreakdownOverview";
+import { QueryInsights } from "@/components/performance/QueryInsights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import {
@@ -18,13 +20,10 @@ import {
   List,
   ListTree,
   Activity,
+  Gauge,
 } from "lucide-react";
+import { formatMs } from "@/lib/format-duration";
 import type { PerformanceDateRange } from "@/server/api/types";
-
-function formatMs(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
-}
 
 export default function PerformancePage() {
   const t = useTranslations("performance");
@@ -41,7 +40,7 @@ export default function PerformancePage() {
   const isServerSide = ["symfony", "laravel", "nodejs", "hono", "fastify"].includes(platform);
 
   const {
-    transactionsData,
+    spanAnalysis,
     apdexData,
     serverStats,
     throughputTimeline,
@@ -81,6 +80,12 @@ export default function PerformancePage() {
 
   const clientSubPages = [
     {
+      title: t("subPages.vitals.title"),
+      description: t("subPages.vitals.description"),
+      href: `${baseUrl}/performance/vitals`,
+      icon: Gauge,
+    },
+    {
       title: t("subPages.transactions.title"),
       description: t("subPages.transactions.description"),
       href: `${baseUrl}/performance/requests?tab=transactions`,
@@ -99,7 +104,7 @@ export default function PerformancePage() {
         },
         {
           label: "p95 latency",
-          value: formatMs(serverStats.data.avgDuration),
+          value: formatMs(serverStats.data.p95Duration),
         },
         {
           label: t("errorRate"),
@@ -122,8 +127,9 @@ export default function PerformancePage() {
       ]
     : [];
 
-  const hasTransactions =
-    transactionsData.data && transactionsData.data.transactions.length > 0;
+  const hasTransactions = serverStats.data
+    ? serverStats.data.totalTransactions > 0
+    : false;
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
@@ -163,6 +169,22 @@ export default function PerformancePage() {
           dateRange={dateRange}
         />
       </div>
+
+      {isServerSide && spanAnalysis.data && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <SpanBreakdownOverview
+            data={spanAnalysis.data.byOp}
+            isLoading={spanAnalysis.isLoading}
+          />
+          <QueryInsights
+            n1Queries={spanAnalysis.data.n1Queries}
+            frequentQueries={spanAnalysis.data.frequentQueries}
+            slowQueries={spanAnalysis.data.slowQueries}
+            isLoading={spanAnalysis.isLoading}
+            baseUrl={baseUrl}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {subPages.map((page) => (

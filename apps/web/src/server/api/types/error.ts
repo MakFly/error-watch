@@ -4,6 +4,7 @@ export type ErrorLevel = "fatal" | "error" | "warning" | "info" | "debug";
 // Binary resolution lifecycle. A new event on a 'resolved' issue auto-reopens it
 // (regression handled in the API event worker).
 export type IssueStatus = "unresolved" | "resolved";
+export type IssuePriority = "low" | "medium" | "high";
 
 export type ErrorGroup = {
   fingerprint: string;
@@ -24,6 +25,10 @@ export type ErrorGroup = {
   lastSeen: Date;
   assignedTo: string | null;
   assignedAt: Date | null;
+  usersAffected: number;
+  priority: IssuePriority;
+  snoozedUntil: Date | null;
+  snoozedBy: string | null;
   status: IssueStatus;
   resolvedAt: Date | null;
   resolvedBy: string | null;
@@ -49,6 +54,17 @@ export type StatusHistoryEntry = {
   fromStatus: IssueStatus;
   toStatus: IssueStatus;
   reason: "manual" | "regression";
+  createdAt: Date;
+  actor: { id: string; name: string | null; email: string | null } | null;
+};
+
+export type ErrorGroupActivityEntry = {
+  id: string;
+  fingerprint: string;
+  type: "status" | "assignment" | "priority" | "snooze" | string;
+  fromValue: Record<string, unknown> | null;
+  toValue: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
   createdAt: Date;
   actor: { id: string; name: string | null; email: string | null } | null;
 };
@@ -265,6 +281,14 @@ export type ReleaseDistribution = {
 export type EventsResponse = {
   events: ErrorEvent[];
   pagination: Pagination;
+};
+
+export type IssueDetailResponse = {
+  group: ErrorGroup;
+  events: EventsResponse;
+  timeline: Array<{ date: string; count: number }>;
+  activity: ErrorGroupActivityEntry[];
+  releases: ReleaseDistribution;
 };
 
 export type GroupsFilter = {

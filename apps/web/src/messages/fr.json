@@ -33,18 +33,17 @@
     "errors": "Erreurs",
     "logs": "Journaux",
     "more": "Plus",
-    "replays": "Rejeux",
     "stats": "Statistiques",
     "performance": "Performance",
     "overview": "Vue d'ensemble",
     "requests": "Requêtes HTTP",
     "transactions": "Transactions",
     "cache": "Cache",
-    "http": "Appels HTTP",
+    "http": "Appels sortants",
     "queues": "Files d'attente",
+    "webVitals": "Web Vitals",
     "settings": "Paramètres",
     "help": "Aide",
-    "admin": "Admin",
     "monitoring": "Surveillance",
     "live": "En direct",
     "reconnecting": "Reconnexion...",
@@ -63,8 +62,8 @@
     "commandDocumentation": "Documentation",
     "commandGoToDashboard": "Aller au tableau de bord",
     "commandCreateNewProject": "Créer un nouveau projet",
-    "crons": "Crons",
     "infrastructure": "Infrastructure",
+    "replays": "Replays",
     "groups": {
       "monitoring": "Surveillance",
       "observability": "Observabilité",
@@ -263,12 +262,16 @@
         "description": "Opérations de cache groupées par op avec taux de hit et latence."
       },
       "http": {
-        "title": "Appels HTTP",
-        "description": "Appels HTTP sortants groupés par hôte et méthode."
+        "title": "Appels sortants",
+        "description": "Appels HTTP vers des services externes, groupés par hôte et méthode."
       },
       "queues": {
         "title": "Files d'attente",
         "description": "Jobs en arrière-plan et consommateurs de bus de messages (Messenger, Laravel Queue)."
+      },
+      "vitals": {
+        "title": "Web Vitals",
+        "description": "Core Web Vitals (LCP, FCP, CLS, INP) au p75 avec notation."
       }
     },
     "requests": {
@@ -844,6 +847,9 @@
       "saveChanges": "Enregistrer les modifications",
       "toastSaved": "Paramètres d'alertes enregistrés",
       "toastFailed": "Échec de l'enregistrement des alertes",
+      "toastChannelEnabled": "Canal activé",
+      "toastChannelDisabled": "Canal désactivé",
+      "toastFillConfig": "Remplissez la configuration ci-dessous",
       "discordCardTitle": "Notifications Discord",
       "discordCardDescription": "Envoyer des alertes sur Discord",
       "discordWebhookLabel": "URL du webhook",
@@ -1229,6 +1235,31 @@
       "statusUnresolved": "Non résolu",
       "statusResolved": "Résolu",
       "statusAll": "Tous les statuts"
+    },
+    "flareList": {
+      "displaying": "{count} erreurs affichées",
+      "displayingRange": "{count} erreurs affichées de {from} à {to}",
+      "last24h": "24 h",
+      "last7d": "7 j",
+      "last30d": "30 j",
+      "all": "Tout",
+      "bucketEvents": "{count} événements",
+      "bucketEmpty": "Aucun événement",
+      "selectAll": "Tout sélectionner",
+      "selectError": "Sélectionner l'erreur",
+      "selected": "{count} sélectionné(s)",
+      "bulkHint": "Sélectionnez des erreurs pour les résoudre ou les fusionner.",
+      "merge": "Fusionner",
+      "resolve": "Résoudre",
+      "reopen": "Rouvrir",
+      "resolved": "Résolu",
+      "open": "Ouvrir",
+      "moreActions": "Plus d'actions",
+      "viewDetails": "Voir les détails",
+      "occurrences": "Occurrences",
+      "users": "Utilisateurs",
+      "lastOccurred": "Dernière occurrence",
+      "firstOccurred": "Première occurrence"
     },
     "page": {
       "selected": "{count} sélectionné(s)",
@@ -1652,8 +1683,8 @@
       "description": "Opérations de cache groupées par op avec taux de hit"
     },
     "performanceHttp": {
-      "title": "Appels HTTP",
-      "description": "Appels HTTP sortants groupés par hôte et méthode"
+      "title": "Appels sortants",
+      "description": "Appels HTTP vers des services externes, groupés par hôte et méthode"
     },
     "performanceQueues": {
       "title": "Files d'attente",
@@ -1678,7 +1709,7 @@
     "performanceRequests": "Performance · Requêtes HTTP",
     "performanceRequestDetail": "Performance · Endpoint",
     "performanceCache": "Performance · Cache",
-    "performanceHttp": "Performance · Appels HTTP",
+    "performanceHttp": "Performance · Appels sortants",
     "performanceDatabase": "Performance · Base de données",
     "performanceQueues": "Performance · Files d'attente",
     "performanceWebVitals": "Performance · Web Vitals",

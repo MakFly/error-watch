@@ -19,28 +19,49 @@ import {
   OrganizationsSection,
 } from "./sections";
 import { useTranslations } from "next-intl";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+
+const VALID_TABS = ["general", "alerts", "api-keys", "billing", "data", "organizations"] as const;
+type TabValue = (typeof VALID_TABS)[number];
 
 export function SettingsContent() {
   const t = useTranslations("settings");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const tabParam = searchParams.get("tab") as TabValue | null;
+  const activeTab = tabParam && VALID_TABS.includes(tabParam) ? tabParam : "general";
+
+  const handleTabChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "general") {
+      params.delete("tab");
+    } else {
+      params.set("tab", value);
+    }
+    const qs = params.toString();
+    router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
+  };
 
   const tabs = [
-    { value: "general", label: t("tabs.general"), icon: Settings },
-    { value: "alerts", label: t("tabs.alerts"), icon: Bell },
-    { value: "api-keys", label: t("tabs.apiKeys"), icon: Key },
-    { value: "billing", label: t("tabs.billing"), icon: CreditCard },
-    { value: "data", label: t("tabs.data"), icon: Database },
-    { value: "organizations", label: t("tabs.organizations"), icon: Building2 },
-  ] as const;
+    { value: "general" as const, label: t("tabs.general"), icon: Settings },
+    { value: "alerts" as const, label: t("tabs.alerts"), icon: Bell },
+    { value: "api-keys" as const, label: t("tabs.apiKeys"), icon: Key },
+    { value: "billing" as const, label: t("tabs.billing"), icon: CreditCard },
+    { value: "data" as const, label: t("tabs.data"), icon: Database },
+    { value: "organizations" as const, label: t("tabs.organizations"), icon: Building2 },
+  ];
 
   return (
     <div className="px-4 lg:px-6">
-      <Tabs defaultValue="general" className="w-full">
-        <TabsList className="mb-6 h-auto flex-wrap gap-1 bg-transparent p-0">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <TabsList className="mb-6 h-auto flex-wrap">
           {tabs.map(({ value, label, icon: Icon }) => (
             <TabsTrigger
               key={value}
               value={value}
-              className="gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg"
+              className="gap-2"
             >
               <Icon className="h-4 w-4" />
               {label}

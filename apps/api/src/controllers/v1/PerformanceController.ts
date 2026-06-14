@@ -584,7 +584,7 @@ export const getServerStats = async (c: AuthContext) => {
   const source = getAggregationSource(dateRange);
   const minutesSinceStart = (Date.now() - startDate.getTime()) / 60000;
 
-  let totalNum: number, errorsNum: number, avgDurationNum: number;
+  let totalNum: number, errorsNum: number, avgDurationNum: number, p95DurationNum: number;
 
   if (source === "raw") {
     const result = await db
@@ -592,6 +592,7 @@ export const getServerStats = async (c: AuthContext) => {
         total: sql<number>`count(*)`,
         errors: sql<number>`count(*) filter (where ${transactions.status} = 'error')`,
         avgDuration: sql<number>`avg(${transactions.duration})`,
+        p95Duration: sql<number>`percentile_cont(0.95) within group (order by ${transactions.duration})`,
       })
       .from(transactions)
       .where(
@@ -601,16 +602,18 @@ export const getServerStats = async (c: AuthContext) => {
         )
       );
 
-    const row = result[0] || { total: 0, errors: 0, avgDuration: 0 };
+    const row = result[0] || { total: 0, errors: 0, avgDuration: 0, p95Duration: 0 };
     totalNum = Number(row.total);
     errorsNum = Number(row.errors);
     avgDurationNum = Number(row.avgDuration) || 0;
+    p95DurationNum = Number(row.p95Duration) || 0;
   } else if (source === "hourly") {
     const result = await db
       .select({
         total: sql<number>`SUM(${transactionAggregatesHourly.count})`,
         errors: sql<number>`SUM(${transactionAggregatesHourly.errorCount})`,
         avgDuration: sql<number>`CASE WHEN SUM(${transactionAggregatesHourly.count}) > 0 THEN SUM(${transactionAggregatesHourly.durationSum}) / SUM(${transactionAggregatesHourly.count}) ELSE 0 END`,
+        p95Duration: sql<number>`MAX(${transactionAggregatesHourly.durationP95})`,
       })
       .from(transactionAggregatesHourly)
       .where(
@@ -620,16 +623,18 @@ export const getServerStats = async (c: AuthContext) => {
         )
       );
 
-    const row = result[0] || { total: 0, errors: 0, avgDuration: 0 };
+    const row = result[0] || { total: 0, errors: 0, avgDuration: 0, p95Duration: 0 };
     totalNum = Number(row.total) || 0;
     errorsNum = Number(row.errors) || 0;
     avgDurationNum = Number(row.avgDuration) || 0;
+    p95DurationNum = Number(row.p95Duration) || 0;
   } else {
     const result = await db
       .select({
         total: sql<number>`SUM(${transactionAggregatesDaily.count})`,
         errors: sql<number>`SUM(${transactionAggregatesDaily.errorCount})`,
         avgDuration: sql<number>`CASE WHEN SUM(${transactionAggregatesDaily.count}) > 0 THEN SUM(${transactionAggregatesDaily.durationSum}) / SUM(${transactionAggregatesDaily.count}) ELSE 0 END`,
+        p95Duration: sql<number>`MAX(${transactionAggregatesDaily.durationP95})`,
       })
       .from(transactionAggregatesDaily)
       .where(
@@ -639,10 +644,11 @@ export const getServerStats = async (c: AuthContext) => {
         )
       );
 
-    const row = result[0] || { total: 0, errors: 0, avgDuration: 0 };
+    const row = result[0] || { total: 0, errors: 0, avgDuration: 0, p95Duration: 0 };
     totalNum = Number(row.total) || 0;
     errorsNum = Number(row.errors) || 0;
     avgDurationNum = Number(row.avgDuration) || 0;
+    p95DurationNum = Number(row.p95Duration) || 0;
   }
 
   return c.json({
@@ -651,6 +657,7 @@ export const getServerStats = async (c: AuthContext) => {
     errorRate: totalNum > 0 ? Math.round((errorsNum / totalNum) * 10000) / 100 : 0,
     errorCount: errorsNum,
     avgDuration: Math.round(avgDurationNum),
+    p95Duration: Math.round(p95DurationNum),
   });
 };
 

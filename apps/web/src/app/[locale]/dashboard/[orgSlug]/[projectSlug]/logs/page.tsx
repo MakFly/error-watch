@@ -8,7 +8,7 @@ import { useCurrentProject } from "@/contexts/ProjectContext";
 import { useLogsStats, useLogsTail } from "@/lib/trpc/hooks";
 import { trpc } from "@/lib/trpc/client";
 import { useDebounce } from "@/hooks/useDebounce";
-import type { ApplicationLog, LogLevel } from "@/server/api";
+import type { ApplicationLog } from "@/server/api";
 import type { LiveLogEvent } from "@/hooks/useSSE";
 import { useSSEStatus } from "@/components/sse-provider";
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -25,6 +25,8 @@ export default function LogsPage() {
   const searchParams = useSearchParams();
   const orgSlug = params.orgSlug as string;
   const projectSlug = params.projectSlug as string;
+  const traceIdParam = searchParams.get("traceId") ?? "";
+  const userIdParam = searchParams.get("userId") ?? "";
   const { currentProjectId } = useCurrentProject();
   const sseStatus = useSSEStatus();
 
@@ -35,8 +37,8 @@ export default function LogsPage() {
     search: "",
     statusCode: "",
     url: "",
-    traceId: searchParams.get("traceId") ?? "",
-    userId: searchParams.get("userId") ?? "",
+    traceId: traceIdParam,
+    userId: userIdParam,
     attribute: "",
   });
   const [paused, setPaused] = useState(false);
@@ -51,22 +53,23 @@ export default function LogsPage() {
   const utils = trpc.useUtils();
 
   useEffect(() => {
-    const traceId = searchParams.get("traceId");
-    const userId = searchParams.get("userId");
-    if (traceId || userId) {
-      setFilters((prev) => ({
+    setLiveEntries([]);
+    setFilters((prev) => {
+      if (prev.traceId === traceIdParam && prev.userId === userIdParam) {
+        return prev;
+      }
+
+      return {
         ...prev,
-        traceId: traceId ?? prev.traceId,
-        userId: userId ?? prev.userId,
-      }));
-    }
-  }, [searchParams]);
+        traceId: traceIdParam,
+        userId: userIdParam,
+      };
+    });
+  }, [traceIdParam, userIdParam]);
 
   const debouncedSearch = useDebounce(filters.search, 300);
   const debouncedStatusCode = useDebounce(filters.statusCode, 300);
   const debouncedUrl = useDebounce(filters.url, 300);
-  const debouncedTraceId = useDebounce(filters.traceId, 300);
-  const debouncedUserId = useDebounce(filters.userId, 300);
   const debouncedAttribute = useDebounce(filters.attribute, 300);
 
   const queryOptions = useMemo(
@@ -77,8 +80,8 @@ export default function LogsPage() {
       search: debouncedSearch || undefined,
       statusCode: debouncedStatusCode || undefined,
       url: debouncedUrl || undefined,
-      traceId: debouncedTraceId || undefined,
-      userId: debouncedUserId || undefined,
+      traceId: filters.traceId || undefined,
+      userId: filters.userId || undefined,
       attribute: debouncedAttribute || undefined,
       enabled: !!currentProjectId,
     }),
@@ -88,8 +91,8 @@ export default function LogsPage() {
       debouncedSearch,
       debouncedStatusCode,
       debouncedUrl,
-      debouncedTraceId,
-      debouncedUserId,
+      filters.traceId,
+      filters.userId,
       debouncedAttribute,
       currentProjectId,
     ],
@@ -146,8 +149,8 @@ export default function LogsPage() {
         setSampledDrops((value) => value + 1);
       }
 
-      if (debouncedTraceId && liveLog.traceId !== debouncedTraceId) return;
-      if (debouncedUserId && liveLog.userId !== debouncedUserId) return;
+      if (filters.traceId && liveLog.traceId !== filters.traceId) return;
+      if (filters.userId && liveLog.userId !== filters.userId) return;
       if (filters.level !== "all" && liveLog.level !== filters.level) return;
 
       const normalized: ApplicationLog = {
@@ -173,7 +176,7 @@ export default function LogsPage() {
 
       setLiveEntries((previous) => [normalized, ...previous].slice(0, 300));
     },
-    [currentProjectId, paused, debouncedTraceId, debouncedUserId, filters.level],
+    [currentProjectId, paused, filters.traceId, filters.userId, filters.level],
   );
 
   useEffect(() => {

@@ -56,9 +56,11 @@ export const useUpdateGroupStatus = () => {
     onSuccess: (_data, vars) => {
       utils.groups.getAll.invalidate();
       utils.groups.getById.invalidate({ fingerprint: vars.fingerprint });
+      utils.groups.getIssueDetail.invalidate({ fingerprint: vars.fingerprint });
       // Re-pull the audit timeline so the new manual transition shows up
       // immediately under the masthead.
       utils.groups.getStatusHistory.invalidate({ fingerprint: vars.fingerprint });
+      utils.groups.getActivity.invalidate({ fingerprint: vars.fingerprint });
     },
   });
 };
@@ -67,8 +69,75 @@ export const useGroupStatusHistory = (fingerprint: string) => {
   return trpc.groups.getStatusHistory.useQuery({ fingerprint });
 };
 
+export const useGroupActivity = (fingerprint: string) => {
+  return trpc.groups.getActivity.useQuery({ fingerprint });
+};
+
+export const useUpdateGroupAssignment = () => {
+  const utils = trpc.useUtils();
+  return trpc.groups.updateAssignment.useMutation({
+    onSuccess: (_data, vars) => {
+      utils.groups.getAll.invalidate();
+      utils.groups.getById.invalidate({ fingerprint: vars.fingerprint });
+      utils.groups.getIssueDetail.invalidate({ fingerprint: vars.fingerprint });
+      utils.groups.getActivity.invalidate({ fingerprint: vars.fingerprint });
+    },
+  });
+};
+
+export const useUpdateGroupPriority = () => {
+  const utils = trpc.useUtils();
+  return trpc.groups.updatePriority.useMutation({
+    onMutate: async (vars) => {
+      await utils.groups.getById.cancel({ fingerprint: vars.fingerprint });
+      await utils.groups.getIssueDetail.cancel({ fingerprint: vars.fingerprint });
+      const previous = utils.groups.getById.getData({ fingerprint: vars.fingerprint });
+      if (previous) {
+        utils.groups.getById.setData({ fingerprint: vars.fingerprint }, { ...previous, priority: vars.priority });
+      }
+      return { previous };
+    },
+    onError: (_error, vars, context) => {
+      if (context?.previous) {
+        utils.groups.getById.setData({ fingerprint: vars.fingerprint }, context.previous);
+      }
+    },
+    onSettled: (_data, _error, vars) => {
+      utils.groups.getAll.invalidate();
+      utils.groups.getById.invalidate({ fingerprint: vars.fingerprint });
+      utils.groups.getIssueDetail.invalidate({ fingerprint: vars.fingerprint });
+      utils.groups.getActivity.invalidate({ fingerprint: vars.fingerprint });
+    },
+  });
+};
+
+export const useUpdateGroupSnooze = () => {
+  const utils = trpc.useUtils();
+  return trpc.groups.updateSnooze.useMutation({
+    onSuccess: (_data, vars) => {
+      utils.groups.getAll.invalidate();
+      utils.groups.getById.invalidate({ fingerprint: vars.fingerprint });
+      utils.groups.getIssueDetail.invalidate({ fingerprint: vars.fingerprint });
+      utils.groups.getActivity.invalidate({ fingerprint: vars.fingerprint });
+    },
+  });
+};
+
+export const useDeleteGroup = () => {
+  const utils = trpc.useUtils();
+  return trpc.groups.delete.useMutation({
+    onSuccess: () => {
+      utils.groups.getAll.invalidate();
+    },
+  });
+};
+
 export const useGroup = (fingerprint: string) => {
   return trpc.groups.getById.useQuery({ fingerprint });
+};
+
+export const useGroupIssueDetail = (fingerprint: string, page: number = 1, limit: number = 50) => {
+  return trpc.groups.getIssueDetail.useQuery({ fingerprint, page, limit });
 };
 
 export const useGroupEvents = (fingerprint: string, page: number = 1, limit: number = 10) => {

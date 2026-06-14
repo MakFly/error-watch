@@ -128,6 +128,8 @@ final class TriggerController extends AbstractController
         ]);
         $this->logger->warning('example-symfony warning log — soft boundary', [
             'risk' => 'medium',
+            'status_code' => 503,
+            'http.status_code' => 503,
         ]);
 
         return new JsonResponse(['logged' => 2]);

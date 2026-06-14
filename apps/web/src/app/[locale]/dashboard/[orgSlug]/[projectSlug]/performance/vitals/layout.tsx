@@ -9,9 +9,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "metadata" });
-  return { title: t("replayDetail") };
+  return { title: t("performanceWebVitals") };
 }
 
-export default function ReplayDetailLayout({ children }: { children: ReactNode }) {
+export default function PerformanceVitalsLayout({ children }: { children: ReactNode }) {
   return children;
 }

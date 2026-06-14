@@ -512,7 +512,8 @@ export function GeneralSection() {
       </Card>
 
       {/* Section 4: Danger Zone */}
-      <Card className="border-destructive/30 bg-gradient-to-t from-destructive/5 to-card">
+      <Card className="border-destructive/50 dark:border-destructive/30 overflow-hidden">
+        <div className="h-1 w-full bg-destructive" />
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />
@@ -523,7 +524,7 @@ export function GeneralSection() {
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
             {/* Delete Project */}
-            <div className="flex items-center justify-between rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+            <div className="flex items-center justify-between rounded-lg border border-destructive/30 dark:border-destructive/20 bg-destructive/5 dark:bg-destructive/10 p-4">
               <div className="space-y-1">
                 <p className="text-sm font-medium">{t("deleteProjectTitle")}</p>
                 <p className="text-xs text-muted-foreground">
@@ -541,7 +542,7 @@ export function GeneralSection() {
             </div>
 
             {/* Delete Organization */}
-            <div className="flex items-center justify-between rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+            <div className="flex items-center justify-between rounded-lg border border-destructive/30 dark:border-destructive/20 bg-destructive/5 dark:bg-destructive/10 p-4">
               <div className="space-y-1">
                 <p className="text-sm font-medium">{t("deleteOrgTitle")}</p>
                 <p className="text-xs text-muted-foreground">

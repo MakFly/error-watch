@@ -65,7 +65,7 @@ export function NavMain({ items, label }: { items: NavItem[]; label?: string }) 
 }
 
 function CollapsibleNavItem({ item }: { item: NavItem }) {
-  const [open, setOpen] = useState(item.isActive ?? false)
+  const [open, setOpen] = useState(true)
 
   return (
     <Collapsible asChild open={open} onOpenChange={setOpen}>

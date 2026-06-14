@@ -14,6 +14,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { Transaction } from "@/server/api/types/performance"
+import { formatMs } from "@/lib/format-duration"
 
 export interface GroupedTransaction {
   name: string
@@ -26,11 +27,6 @@ export interface GroupedTransaction {
   statuses: Record<string, number>
   httpStatuses: Record<number, number>
   transactions: Transaction[]
-}
-
-function formatDuration(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`
-  return `${Math.round(ms)}ms`
 }
 
 function formatDateSafe(date: Date | string | null | undefined): string {
@@ -262,7 +258,7 @@ export function createTransactionsColumns(): ColumnDef<Transaction>[] {
       ),
       cell: ({ row }) => (
         <div className="text-right font-mono text-sm">
-          {formatDuration(row.original.duration)}
+          {formatMs(row.original.duration)}
         </div>
       ),
     },
@@ -438,7 +434,7 @@ export function createGroupedTransactionsColumns(): ColumnDef<GroupedTransaction
       ),
       cell: ({ row }) => (
         <div className="text-right font-mono text-sm">
-          {formatDuration(row.original.avgDuration)}
+          {formatMs(row.original.avgDuration)}
         </div>
       ),
     },
@@ -447,7 +443,7 @@ export function createGroupedTransactionsColumns(): ColumnDef<GroupedTransaction
       header: () => <div className="hidden text-right lg:block">Min</div>,
       cell: ({ row }) => (
         <div className="hidden text-right font-mono text-sm text-muted-foreground lg:block">
-          {formatDuration(row.original.minDuration)}
+          {formatMs(row.original.minDuration)}
         </div>
       ),
     },
@@ -456,7 +452,7 @@ export function createGroupedTransactionsColumns(): ColumnDef<GroupedTransaction
       header: () => <div className="hidden text-right lg:block">Max</div>,
       cell: ({ row }) => (
         <div className="hidden text-right font-mono text-sm text-muted-foreground lg:block">
-          {formatDuration(row.original.maxDuration)}
+          {formatMs(row.original.maxDuration)}
         </div>
       ),
     },

@@ -1,5 +1,16 @@
 import { fetchAPI } from './client';
-import type { ApplicationLog, ErrorGroup, EventsResponse, IssueStatus, ReleaseDistribution, GroupsFilter, StatusHistoryEntry } from './types';
+import type {
+  ApplicationLog,
+  ErrorGroup,
+  ErrorGroupActivityEntry,
+  EventsResponse,
+  IssueDetailResponse,
+  GroupsFilter,
+  IssuePriority,
+  IssueStatus,
+  ReleaseDistribution,
+  StatusHistoryEntry,
+} from './types';
 
 export type GroupsResponse = {
   groups: ErrorGroup[];
@@ -43,6 +54,17 @@ export const getTimeline = async (fingerprint: string): Promise<Array<{ date: st
   return fetchAPI<Array<{ date: string; count: number }>>(`/groups/${fingerprint}/timeline`);
 };
 
+export const getIssueDetail = async (
+  fingerprint: string,
+  page: number = 1,
+  limit: number = 50
+): Promise<IssueDetailResponse> => {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+  return fetchAPI<IssueDetailResponse>(`/groups/${fingerprint}/detail?${params.toString()}`);
+};
+
 export const updateStatus = async (fingerprint: string, status: IssueStatus): Promise<ErrorGroup> => {
   return fetchAPI<ErrorGroup>(`/groups/${fingerprint}/status`, {
     method: "PATCH",
@@ -59,6 +81,30 @@ export const updateAssignment = async (fingerprint: string, assignedTo: string |
     method: "PATCH",
     body: JSON.stringify({ assignedTo }),
   });
+};
+
+export const updatePriority = async (fingerprint: string, priority: IssuePriority): Promise<ErrorGroup> => {
+  return fetchAPI<ErrorGroup>(`/groups/${fingerprint}/priority`, {
+    method: "PATCH",
+    body: JSON.stringify({ priority }),
+  });
+};
+
+export const updateSnooze = async (fingerprint: string, until: string | null): Promise<ErrorGroup> => {
+  return fetchAPI<ErrorGroup>(`/groups/${fingerprint}/snooze`, {
+    method: "PATCH",
+    body: JSON.stringify({ until }),
+  });
+};
+
+export const deleteGroup = async (fingerprint: string): Promise<{ success: boolean }> => {
+  return fetchAPI<{ success: boolean }>(`/groups/${fingerprint}`, {
+    method: "DELETE",
+  });
+};
+
+export const getActivity = async (fingerprint: string): Promise<ErrorGroupActivityEntry[]> => {
+  return fetchAPI<ErrorGroupActivityEntry[]>(`/groups/${fingerprint}/activity`);
 };
 
 export const getReleases = async (fingerprint: string): Promise<ReleaseDistribution> => {

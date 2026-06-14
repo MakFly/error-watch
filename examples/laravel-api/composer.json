@@ -7,7 +7,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "errorwatch/sdk-php": "^2.9",
+        "errorwatch/sdk-php": "@dev",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1"
@@ -84,5 +84,23 @@
         }
     },
     "minimum-stability": "dev",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "name": "errorwatch-monorepo",
+            "type": "path",
+            "url": "../../packages/sdk-laravel",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "name": "errorwatch-standalone",
+            "type": "path",
+            "url": "../../../errorwatch-sdk-php",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
 }

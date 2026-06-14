@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatMs } from "@/lib/format-duration";
 
 interface DurationChartProps {
   data: Array<{ bucket: string; p50: number; p75: number; p95: number }>;
@@ -44,11 +45,6 @@ function formatBucket(bucket: string, dateRange: string): string {
   }
   const d = new Date(bucket);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatMs(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
 }
 
 export function DurationChart({ data, isLoading, dateRange }: DurationChartProps) {

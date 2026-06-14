@@ -33,6 +33,9 @@ export const errorGroups = pgTable("error_groups", {
   mergedInto: text("merged_into"),
   // User impact
   usersAffected: integer("users_affected").notNull().default(0),
+  priority: text("priority").notNull().default("medium"), // 'low' | 'medium' | 'high'
+  snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
+  snoozedBy: text("snoozed_by"),
   // Resolution lifecycle. 'resolved' issues are filtered out of the list by
   // default; a new event on a resolved group auto-reopens it (regression),
   // handled in the upsert in queue/workers/event.worker.ts.
@@ -55,6 +58,7 @@ export const errorGroups = pgTable("error_groups", {
   exceptionTypeIdx: index("idx_error_groups_exception_type").on(table.exceptionType),
   // Default issues list filters on (projectId, status='unresolved') sorted by lastSeen.
   projectStatusLastSeenIdx: index("idx_error_groups_project_status_last_seen").on(table.projectId, table.status, table.lastSeen),
+  projectSnoozedUntilIdx: index("idx_error_groups_project_snoozed_until").on(table.projectId, table.snoozedUntil),
 }));
 
 // Audit log for issue status transitions. Each row records a single
@@ -74,6 +78,24 @@ export const errorGroupStatusEvents = pgTable("error_group_status_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   fingerprintCreatedIdx: index("idx_error_group_status_events_fingerprint_created").on(
+    table.fingerprint,
+    table.createdAt,
+  ),
+}));
+
+export const errorGroupActivityEvents = pgTable("error_group_activity_events", {
+  id: text("id").primaryKey(),
+  fingerprint: text("fingerprint")
+    .notNull()
+    .references(() => errorGroups.fingerprint, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  actorUserId: text("actor_user_id"),
+  fromValue: jsonb("from_value"),
+  toValue: jsonb("to_value"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  fingerprintCreatedIdx: index("idx_error_group_activity_events_fingerprint_created").on(
     table.fingerprint,
     table.createdAt,
   ),

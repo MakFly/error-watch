@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b133ac973a24f83948bdccc840b09afa",
+    "content-hash": "7aaad50a7124676598bdcfa2963b381b",
     "packages": [
         {
             "name": "brick/math",
@@ -510,17 +510,11 @@
         },
         {
             "name": "errorwatch/sdk-php",
-            "version": "v2.9.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/MakFly/errorwatch-sdk-php.git",
-                "reference": "0a49596f090ab5416ea8eb70b395856b82a679fd"
-            },
+            "version": "dev-feat/flare-protocol",
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/MakFly/errorwatch-sdk-php/zipball/0a49596f090ab5416ea8eb70b395856b82a679fd",
-                "reference": "0a49596f090ab5416ea8eb70b395856b82a679fd",
-                "shasum": ""
+                "type": "path",
+                "url": "../../../errorwatch-sdk-php",
+                "reference": "ce5e5a79166a3d6ab18298ed2eaf2ff6c2296e24"
             },
             "require": {
                 "guzzlehttp/guzzle": "^7.0",
@@ -554,12 +548,12 @@
             "type": "library",
             "extra": {
                 "laravel": {
-                    "aliases": {
-                        "ErrorWatch": "ErrorWatch\\Laravel\\Facades\\ErrorWatch"
-                    },
                     "providers": [
                         "ErrorWatch\\Laravel\\ErrorWatchServiceProvider"
-                    ]
+                    ],
+                    "aliases": {
+                        "ErrorWatch": "ErrorWatch\\Laravel\\Facades\\ErrorWatch"
+                    }
                 }
             },
             "autoload": {
@@ -569,7 +563,27 @@
                     "ErrorWatch\\Symfony\\": "src/Symfony/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "ErrorWatch\\Sdk\\Tests\\": "tests/",
+                    "ErrorWatch\\Laravel\\Tests\\": "tests/Laravel/",
+                    "ErrorWatch\\Symfony\\Tests\\": "tests/Symfony/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "phpunit"
+                ],
+                "test:coverage": [
+                    "phpunit --coverage-html coverage"
+                ],
+                "post-install-cmd": [
+                    "ErrorWatch\\Sdk\\Composer\\SymfonyBundleInstaller::postInstall"
+                ],
+                "post-update-cmd": [
+                    "ErrorWatch\\Sdk\\Composer\\SymfonyBundleInstaller::postInstall"
+                ]
+            },
             "license": [
                 "MIT"
             ],
@@ -595,7 +609,10 @@
                 "issues": "https://github.com/MakFly/errorwatch-sdk-php/issues",
                 "source": "https://github.com/MakFly/errorwatch-sdk-php"
             },
-            "time": "2026-05-29T10:45:06+00:00"
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "fruitcake/php-cors",
@@ -8410,7 +8427,9 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {},
+    "stability-flags": {
+        "errorwatch/sdk-php": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

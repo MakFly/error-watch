@@ -1,5 +1,46 @@
 <?php
 
+$errorWatchBasePath = static function (): string {
+    return function_exists('base_path') ? base_path() : dirname(__DIR__);
+};
+
+$errorWatchGitRaw = static function (string $args) use ($errorWatchBasePath): ?string {
+    if (!function_exists('shell_exec')) {
+        return null;
+    }
+
+    try {
+        $command = 'git -C ' . escapeshellarg($errorWatchBasePath()) . ' ' . $args . ' 2>/dev/null';
+        $output = @shell_exec($command);
+
+        return is_string($output) ? trim($output) : null;
+    } catch (\Throwable) {
+        return null;
+    }
+};
+
+$errorWatchGitValue = static function (string $args) use ($errorWatchGitRaw): ?string {
+    $value = $errorWatchGitRaw($args);
+
+    return $value !== null && $value !== '' ? $value : null;
+};
+
+$errorWatchGitCommit = env('ERRORWATCH_GIT_COMMIT')
+    ?: env('GIT_COMMIT')
+    ?: env('GITHUB_SHA')
+    ?: env('VERCEL_GIT_COMMIT_SHA')
+    ?: $errorWatchGitValue('rev-parse --short=12 HEAD');
+
+$errorWatchGitBranch = env('ERRORWATCH_GIT_BRANCH')
+    ?: env('GIT_BRANCH')
+    ?: env('GITHUB_REF_NAME')
+    ?: env('VERCEL_GIT_COMMIT_REF')
+    ?: $errorWatchGitValue('rev-parse --abbrev-ref HEAD');
+
+$errorWatchGitDirty = env('ERRORWATCH_GIT_DIRTY')
+    ?: env('GIT_DIRTY')
+    ?: (($errorWatchGitRaw('status --porcelain') ?? '') !== '' ? 'true' : 'false');
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -17,7 +58,17 @@ return [
     'endpoint' => env('ERRORWATCH_ENDPOINT'),
     'api_key' => env('ERRORWATCH_API_KEY'),
     'environment' => env('APP_ENV', 'production'),
-    'release' => env('APP_VERSION'),
+    'release' => env('ERRORWATCH_RELEASE', env('APP_VERSION', $errorWatchGitCommit)),
+    'server_name' => env('ERRORWATCH_SERVER_NAME', gethostname() ?: 'unknown'),
+    'git' => [
+        'commit' => $errorWatchGitCommit,
+        'branch' => $errorWatchGitBranch,
+        'dirty' => $errorWatchGitDirty,
+    ],
+
+    // Use the envelope protocol for the profiler demo so the full `profile`
+    // object reaches the dashboard issue detail.
+    'protocol' => env('ERRORWATCH_PROTOCOL', 'envelope'),
 
     // Session replay configuration
     'replay' => [
@@ -86,10 +137,18 @@ return [
         'excluded_routes' => ['telescope/*', 'horizon/*', '_ignition/*'],
     ],
 
-    // Laravel logging integration (replaces Monolog handler)
+    // Laravel logging integration (Sentry Monolog parity)
     'logging' => [
         'enabled' => env('ERRORWATCH_LOGGING_ENABLED', true),
-        'level' => env('ERRORWATCH_LOG_LEVEL', 'error'),
+        // Legacy min level gate for the MessageLogged listener.
+        'level' => env('ERRORWATCH_LOG_LEVEL', 'debug'),
+        // info+ -> breadcrumbs (buffered, sent with next event).
+        'breadcrumb_level' => env('ERRORWATCH_BREADCRUMB_LEVEL', 'info'),
+        // warning+ -> live logs product (not issues).
+        'logs_level' => env('ERRORWATCH_LOGS_LEVEL', 'warning'),
+        // Sentry default: no issue per Log::error unless explicitly opted in.
+        'capture_as_events' => env('ERRORWATCH_CAPTURE_LOG_EVENTS', false),
+        'capture_as_events_level' => env('ERRORWATCH_CAPTURE_LOG_EVENTS_LEVEL', 'fatal'),
         'excluded_channels' => ['errorwatch'],
     ],
 
@@ -103,6 +162,17 @@ return [
         'enabled' => true,
         'level' => 'debug',
         'excluded_channels' => [],
+    ],
+
+    // Full request profile (parity with laravel-web-profiler).
+    'profiler' => [
+        'enabled' => env('ERRORWATCH_PROFILER', true),
+        'collectors' => [
+            'mail' => true,
+            'view' => true,
+            'gate' => true,
+            'events' => true,
+        ],
     ],
 
     // Callbacks for modifying events before sending

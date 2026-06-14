@@ -6,12 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatMs } from "@/lib/format-duration";
 import type { DuplicateQuery, N1Query, SlowQuery } from "@/server/api/types/performance";
-
-function formatDuration(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
-}
 
 function n1BadgeVariant(count: number): "destructive" | "secondary" {
   if (count >= 20) return "destructive";
@@ -93,7 +89,7 @@ export function QueryInsights({ n1Queries, frequentQueries, slowQueries, isLoadi
                         <span>→ {q.transactionName}</span>
                       )}
                     </div>
-                    <span className="shrink-0 ml-4">total: {formatDuration(q.totalDuration)}</span>
+                    <span className="shrink-0 ml-4">total: {formatMs(q.totalDuration)}</span>
                   </div>
                 </div>
               ))}
@@ -121,7 +117,7 @@ export function QueryInsights({ n1Queries, frequentQueries, slowQueries, isLoadi
                     </span>
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {formatDuration(q.totalDuration)} {t("columns.totalTime").toLowerCase()}
+                    {formatMs(q.totalDuration)} {t("columns.totalTime").toLowerCase()}
                   </div>
                 </div>
               ))}
@@ -145,7 +141,7 @@ export function QueryInsights({ n1Queries, frequentQueries, slowQueries, isLoadi
                       {q.description || <span className="text-muted-foreground italic">—</span>}
                     </code>
                     <span className="text-xs font-mono text-muted-foreground shrink-0">
-                      {formatDuration(q.duration)}
+                      {formatMs(q.duration)}
                     </span>
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground truncate">

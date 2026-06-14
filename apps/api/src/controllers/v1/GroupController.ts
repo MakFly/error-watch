@@ -79,6 +79,46 @@ export const getById = async (c: AuthContext) => {
   return c.json(group);
 };
 
+export const getIssueDetail = async (c: AuthContext) => {
+  const userId = c.get("userId");
+  const fingerprint = c.req.param("fingerprint");
+  const page = parseInt(c.req.query("page") || "1", 10);
+  const limit = parseInt(c.req.query("limit") || "50", 10);
+
+  const group = await GroupService.getById(fingerprint);
+  if (!group) {
+    return c.json({ error: "Group not found" }, 404);
+  }
+
+  if (group.projectId) {
+    const hasAccess = await verifyProjectAccess(group.projectId, userId);
+    if (!hasAccess) {
+      logger.warn("User attempted to access issue detail without project permission", {
+        userId,
+        fingerprint,
+        projectId: group.projectId,
+      });
+      return c.json({ error: "Forbidden: You don't have access to this project" }, 403);
+    }
+  }
+
+  logger.debug("GET /api/v1/groups/:fingerprint/detail", { fingerprint, page, limit });
+  const [events, timeline, activity, releases] = await Promise.all([
+    GroupService.getEvents(fingerprint, page, limit),
+    GroupService.getTimeline(fingerprint),
+    GroupService.getActivity(fingerprint),
+    GroupService.getReleases(fingerprint),
+  ]);
+
+  return c.json({
+    group,
+    events,
+    timeline,
+    activity,
+    releases,
+  });
+};
+
 export const getEvents = async (c: AuthContext) => {
   const userId = c.get("userId");
   const fingerprint = c.req.param("fingerprint");
@@ -157,7 +197,7 @@ export const updateAssignment = async (c: AuthContext) => {
     }
   }
 
-  const result = await GroupService.updateAssignment(fingerprint, assignedTo);
+  const result = await GroupService.updateAssignment(fingerprint, assignedTo, userId);
   if (!result) {
     return c.json({ error: "Group not found" }, 404);
   }
@@ -242,6 +282,141 @@ export const getStatusHistory = async (c: AuthContext) => {
             id: row.actorUserId,
             name: actorMap.get(row.actorUserId)?.name ?? null,
             email: actorMap.get(row.actorUserId)?.email ?? null,
+          }
+        : null,
+    })),
+  );
+};
+
+export const updatePriority = async (c: AuthContext) => {
+  const userId = c.get("userId");
+  const fingerprint = c.req.param("fingerprint");
+  const body = await c.req.json().catch(() => null) as { priority?: unknown } | null;
+  const priority = body?.priority;
+
+  if (priority !== "low" && priority !== "medium" && priority !== "high") {
+    return c.json({ error: "priority must be 'low', 'medium' or 'high'" }, 400);
+  }
+
+  const group = await GroupService.getById(fingerprint);
+  if (!group) {
+    return c.json({ error: "Group not found" }, 404);
+  }
+
+  if (group.projectId) {
+    const hasAccess = await verifyProjectAccess(group.projectId, userId);
+    if (!hasAccess) {
+      return c.json({ error: "Forbidden: You don't have access to this project" }, 403);
+    }
+  }
+
+  logger.info("PATCH /api/v1/groups/:fingerprint/priority", { fingerprint, priority, userId });
+  const result = await GroupService.updatePriority(fingerprint, priority, userId);
+  if (!result) {
+    return c.json({ error: "Group not found" }, 404);
+  }
+
+  return c.json(result);
+};
+
+export const updateSnooze = async (c: AuthContext) => {
+  const userId = c.get("userId");
+  const fingerprint = c.req.param("fingerprint");
+  const body = await c.req.json().catch(() => null) as { until?: unknown } | null;
+  const rawUntil = body?.until;
+
+  if (rawUntil !== null && typeof rawUntil !== "string") {
+    return c.json({ error: "until must be an ISO string or null" }, 400);
+  }
+
+  let until: Date | null = null;
+  if (typeof rawUntil === "string") {
+    until = new Date(rawUntil);
+    if (Number.isNaN(until.getTime())) {
+      return c.json({ error: "until must be a valid ISO date" }, 400);
+    }
+  }
+
+  const group = await GroupService.getById(fingerprint);
+  if (!group) {
+    return c.json({ error: "Group not found" }, 404);
+  }
+
+  if (group.projectId) {
+    const hasAccess = await verifyProjectAccess(group.projectId, userId);
+    if (!hasAccess) {
+      return c.json({ error: "Forbidden: You don't have access to this project" }, 403);
+    }
+  }
+
+  logger.info("PATCH /api/v1/groups/:fingerprint/snooze", { fingerprint, until, userId });
+  const result = await GroupService.updateSnooze(fingerprint, until, userId);
+  if (!result) {
+    return c.json({ error: "Group not found" }, 404);
+  }
+
+  return c.json(result);
+};
+
+export const remove = async (c: AuthContext) => {
+  const userId = c.get("userId");
+  const fingerprint = c.req.param("fingerprint");
+
+  const group = await GroupService.getById(fingerprint);
+  if (!group) {
+    return c.json({ error: "Group not found" }, 404);
+  }
+
+  if (group.projectId) {
+    const hasAccess = await verifyProjectAccess(group.projectId, userId);
+    if (!hasAccess) {
+      return c.json({ error: "Forbidden: You don't have access to this project" }, 403);
+    }
+  }
+
+  logger.info("DELETE /api/v1/groups/:fingerprint", { fingerprint, userId });
+  await GroupService.delete(fingerprint);
+  return c.json({ success: true });
+};
+
+export const getActivity = async (c: AuthContext) => {
+  const userId = c.get("userId");
+  const fingerprint = c.req.param("fingerprint");
+
+  const group = await GroupService.getById(fingerprint);
+  if (!group) {
+    return c.json({ error: "Group not found" }, 404);
+  }
+
+  if (group.projectId) {
+    const hasAccess = await verifyProjectAccess(group.projectId, userId);
+    if (!hasAccess) {
+      return c.json({ error: "Forbidden: You don't have access to this project" }, 403);
+    }
+  }
+
+  logger.debug("GET /api/v1/groups/:fingerprint/activity", { fingerprint });
+  const activity = await GroupService.getActivity(fingerprint);
+  const actorIds = Array.from(
+    new Set(activity.map((event) => event.actorUserId).filter((id): id is string => Boolean(id))),
+  );
+  const actors = actorIds.length > 0 ? await GroupService.getUsersByIds(actorIds) : [];
+  const actorMap = new Map(actors.map((u) => [u.id, u]));
+
+  return c.json(
+    activity.map((event) => ({
+      id: event.id,
+      fingerprint: event.fingerprint,
+      type: event.type,
+      fromValue: event.fromValue,
+      toValue: event.toValue,
+      metadata: event.metadata,
+      createdAt: event.createdAt,
+      actor: event.actorUserId
+        ? {
+            id: event.actorUserId,
+            name: actorMap.get(event.actorUserId)?.name ?? null,
+            email: actorMap.get(event.actorUserId)?.email ?? null,
           }
         : null,
     })),

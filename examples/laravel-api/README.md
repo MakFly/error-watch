@@ -10,6 +10,7 @@ A complete Laravel 12 REST API example showcasing [ErrorWatch](https://errorwatc
 - **Log integration** — `Log::warning()`, `Log::error()` etc. appear in ErrorWatch
 - **User context** — authenticated user is attached to every event
 - **Test routes** — `/api/v1/test/error` and `/api/v1/test/warning` let you trigger events instantly
+- **APM test routes** — `/api/v1/test/perf/*` trigger slow queries, N+1, external calls, cache ops
 
 ## Prerequisites
 
@@ -52,6 +53,17 @@ touch database/database.sqlite
 php artisan migrate --seed
 php artisan serve
 ```
+
+## SDK path setup
+
+The example uses a local path repository for `errorwatch/sdk-php`. Composer
+tries two locations in order:
+
+1. `../../packages/sdk-laravel` — the monorepo convention (`packages/` is gitignored; clone the SDK there)
+2. `../../../errorwatch-sdk-php` — standalone clone next to the monorepo
+
+Composer picks the first path that exists. If neither resolves, `composer install` fails —
+clone [errorwatch-sdk-php](https://github.com/MakFly/errorwatch-sdk-laravel) into one of those locations.
 
 ## ErrorWatch configuration
 
@@ -121,6 +133,15 @@ The Demo User has 20 tasks with random statuses/priorities and 5 tags pre-assign
 | GET | `/api/v1/test/error` | Throws a RuntimeException → captured by ErrorWatch |
 | GET | `/api/v1/test/warning` | Logs a warning → sent to ErrorWatch |
 | GET | `/api/v1/test/divide-by-zero` | Division by zero error |
+
+### APM / Performance test routes (public)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/test/perf/slow` | 300ms sleep + slow DB query → transaction with high duration |
+| GET | `/api/v1/test/perf/n-plus-one` | Loads tasks then accesses `user` per row → N+1 detection |
+| GET | `/api/v1/test/perf/external-call` | HTTP call to httpbin.org → external call tracing |
+| GET | `/api/v1/test/perf/cache` | Cache put/get/forget → cache operations tracing |
 
 ## Quick test with curl
 

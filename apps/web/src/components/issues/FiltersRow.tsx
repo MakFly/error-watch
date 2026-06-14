@@ -50,6 +50,8 @@ export function FiltersRow({
   className,
 }: FiltersRowProps) {
   const t = useTranslations("issues.filters");
+  const controlClassName =
+    "border-issues-border bg-issues-surface/60 text-foreground shadow-sm dark:border-muted-foreground/35 dark:bg-background/55 dark:hover:border-muted-foreground/55 dark:focus:border-pulse-primary/70";
 
   return (
     <div
@@ -67,7 +69,8 @@ export function FiltersRow({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           className={cn(
-            "w-full rounded-lg border border-issues-border bg-issues-surface/50 py-2 pl-10 pr-4 text-sm",
+            "w-full rounded-lg border py-2 pl-10 pr-4 text-sm",
+            controlClassName,
             "placeholder:text-muted-foreground/50",
             "focus:border-pulse-primary/50 focus:outline-none focus:ring-2 focus:ring-pulse-primary/20",
             "transition-all"
@@ -85,7 +88,7 @@ export function FiltersRow({
 
       {/* Environment */}
       <Select value={environment} onValueChange={onEnvironmentChange}>
-        <SelectTrigger className="w-full border-issues-border bg-issues-surface/50 sm:w-[140px]">
+        <SelectTrigger className={cn("w-full sm:w-[140px]", controlClassName)}>
           <SelectValue placeholder={t("allEnvs")} />
         </SelectTrigger>
         <SelectContent>
@@ -113,7 +116,7 @@ export function FiltersRow({
 
       {/* Date Range */}
       <Select value={dateRange} onValueChange={(v) => onDateRangeChange(v as DateRange)}>
-        <SelectTrigger className="w-full border-issues-border bg-issues-surface/50 sm:w-[130px]">
+        <SelectTrigger className={cn("w-full sm:w-[130px]", controlClassName)}>
           <SelectValue placeholder={t("allTime")} />
         </SelectTrigger>
         <SelectContent>
@@ -128,7 +131,7 @@ export function FiltersRow({
       {/* Level */}
       {onLevelChange && (
         <Select value={level || "actionable"} onValueChange={onLevelChange}>
-          <SelectTrigger className="w-full border-issues-border bg-issues-surface/50 sm:w-[140px]">
+          <SelectTrigger className={cn("w-full sm:w-[140px]", controlClassName)}>
             <SelectValue placeholder={t("levelActionable")} />
           </SelectTrigger>
           <SelectContent>
@@ -148,7 +151,7 @@ export function FiltersRow({
           (keeps other consumers backward-compatible). */}
       {onStatusChange && (
         <Select value={status || "unresolved"} onValueChange={(v) => onStatusChange(v as StatusFilter)}>
-          <SelectTrigger className="w-full border-issues-border bg-issues-surface/50 sm:w-[150px]">
+          <SelectTrigger className={cn("w-full sm:w-[150px]", controlClassName)}>
             <SelectValue placeholder={t("statusUnresolved")} />
           </SelectTrigger>
           <SelectContent>
@@ -175,7 +178,8 @@ export function FiltersRow({
               onHttpStatusChange(value);
             }}
             className={cn(
-              "h-10 w-full rounded-lg border border-issues-border bg-issues-surface/50 py-2 pl-9 pr-3 font-mono text-sm tabular-nums",
+              "h-10 w-full rounded-lg border py-2 pl-9 pr-3 font-mono text-sm tabular-nums",
+              controlClassName,
               "placeholder:font-sans placeholder:text-muted-foreground/50",
               "focus:border-pulse-primary/50 focus:outline-none focus:ring-2 focus:ring-pulse-primary/20",
               "transition-all"

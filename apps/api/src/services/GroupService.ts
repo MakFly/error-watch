@@ -80,14 +80,14 @@ export const GroupService = {
     return timeline;
   },
 
-  updateAssignment: async (fingerprint: string, assignedTo: string | null) => {
-    logger.info("Updating issue assignment", { fingerprint, assignedTo });
+  updateAssignment: async (fingerprint: string, assignedTo: string | null, userId: string) => {
+    logger.info("Updating issue assignment", { fingerprint, assignedTo, userId });
     const group = await GroupRepository.findByFingerprint(fingerprint);
     if (!group) {
       return null;
     }
 
-    const result = await GroupRepository.updateAssignment(fingerprint, assignedTo);
+    const result = await GroupRepository.updateAssignment(fingerprint, assignedTo, userId);
     return result[0] ? { ...group, ...result[0] } : null;
   },
 
@@ -110,6 +110,39 @@ export const GroupService = {
 
     const result = await GroupRepository.updateStatus(fingerprint, status, userId);
     return result[0] ? { ...group, ...result[0] } : null;
+  },
+
+  updatePriority: async (fingerprint: string, priority: "low" | "medium" | "high", userId: string) => {
+    logger.info("Updating issue priority", { fingerprint, priority, userId });
+    const group = await GroupRepository.findByFingerprint(fingerprint);
+    if (!group) {
+      return null;
+    }
+
+    const result = await GroupRepository.updatePriority(fingerprint, priority, userId);
+    return result[0] ? { ...group, ...result[0] } : null;
+  },
+
+  updateSnooze: async (fingerprint: string, until: Date | null, userId: string) => {
+    logger.info("Updating issue snooze", { fingerprint, until, userId });
+    const group = await GroupRepository.findByFingerprint(fingerprint);
+    if (!group) {
+      return null;
+    }
+
+    const result = await GroupRepository.updateSnooze(fingerprint, until, userId);
+    return result[0] ? { ...group, ...result[0] } : null;
+  },
+
+  delete: async (fingerprint: string) => {
+    logger.info("Deleting issue group", { fingerprint });
+    const result = await GroupRepository.delete(fingerprint);
+    return result[0] ?? null;
+  },
+
+  getActivity: async (fingerprint: string) => {
+    logger.debug("Fetching issue activity", { fingerprint });
+    return await GroupRepository.getActivity(fingerprint);
   },
 
   getReleases: async (fingerprint: string) => {

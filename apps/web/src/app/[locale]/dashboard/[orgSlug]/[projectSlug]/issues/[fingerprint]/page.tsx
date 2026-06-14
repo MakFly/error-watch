@@ -6,8 +6,7 @@ import Link from "next/link";
 import { useCurrentOrganization } from "@/contexts/OrganizationContext";
 import { useCurrentProject } from "@/contexts/ProjectContext";
 import {
-  useGroup,
-  useGroupEvents,
+  useGroupIssueDetail,
   useMembersByOrganization,
   useUpdateGroupStatus,
 } from "@/lib/trpc/hooks";
@@ -69,14 +68,17 @@ export default function IssueDetailPage() {
   const { currentProjectSlug } = useCurrentProject();
   const tStatus = useTranslations("issueDetail.status");
 
-  const { data: group, isLoading, error } = useGroup(fingerprint);
-  const { data: eventsData } = useGroupEvents(fingerprint, 1, 50);
+  const { data: issueDetail, isLoading, error } = useGroupIssueDetail(fingerprint, 1, 50);
   const initialEventId = searchParams?.get("event") ?? null;
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId);
   const { data: members } = useMembersByOrganization(currentOrgId || "");
   const updateStatus = useUpdateGroupStatus();
 
-  const events = eventsData?.events || [];
+  const group = issueDetail?.group || null;
+  const events = issueDetail?.events?.events || [];
+  const timeline = issueDetail?.timeline || [];
+  const releaseDist = issueDetail?.releases;
+  const activity = issueDetail?.activity || [];
   const resolvedBy = group?.resolvedBy ?? null;
   const resolverName = useMemo(() => {
     if (!resolvedBy) return null;
@@ -112,6 +114,12 @@ export default function IssueDetailPage() {
         line: group.line,
         level: group.level,
         count: group.count,
+        usersAffected: group.usersAffected ?? 0,
+        assignedTo: group.assignedTo,
+        assignedAt: group.assignedAt,
+        priority: group.priority ?? "medium",
+        snoozedUntil: group.snoozedUntil,
+        snoozedBy: group.snoozedBy,
         firstSeen: group.firstSeen,
         lastSeen: group.lastSeen,
         status: group.status,
@@ -119,6 +127,9 @@ export default function IssueDetailPage() {
         resolvedAt: group.resolvedAt,
       }}
       events={events}
+      timeline={timeline}
+      releaseDist={releaseDist}
+      activity={activity}
       selectedEventId={selectedEventId}
       onSelectEvent={setSelectedEventId}
       orgSlug={currentOrgSlug || ""}
@@ -127,6 +138,12 @@ export default function IssueDetailPage() {
       isResolvePending={updateStatus.isPending}
       onToggleResolve={handleToggleStatus}
       resolverLabel={resolverName}
+      members={(members || []).map((member) => ({
+        id: member.userId,
+        name: member.user?.name ?? null,
+        email: member.user?.email ?? undefined,
+        image: member.user?.image ?? null,
+      }))}
     />
   );
 }

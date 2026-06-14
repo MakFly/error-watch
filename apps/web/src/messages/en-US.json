@@ -33,18 +33,17 @@
     "errors": "Errors",
     "logs": "Logs",
     "more": "More",
-    "replays": "Replays",
     "stats": "Stats",
     "performance": "Performance",
     "overview": "Overview",
     "requests": "Requests",
     "transactions": "Transactions",
     "cache": "Cache",
-    "http": "HTTP",
+    "http": "External Calls",
     "queues": "Queues",
+    "webVitals": "Web Vitals",
     "settings": "Settings",
     "help": "Help",
-    "admin": "Admin",
     "monitoring": "Monitoring",
     "live": "Live",
     "reconnecting": "Reconnecting...",
@@ -63,8 +62,8 @@
     "commandDocumentation": "Documentation",
     "commandGoToDashboard": "Go to Dashboard",
     "commandCreateNewProject": "Create New Project",
-    "crons": "Crons",
     "infrastructure": "Infrastructure",
+    "replays": "Replays",
     "groups": {
       "monitoring": "Monitoring",
       "observability": "Observability",
@@ -263,12 +262,16 @@
         "description": "Cache operations grouped by op with hit rate and latency."
       },
       "http": {
-        "title": "HTTP Calls",
-        "description": "Outbound HTTP calls grouped by host and method."
+        "title": "External Calls",
+        "description": "Outbound HTTP calls to external services, grouped by host and method."
       },
       "queues": {
         "title": "Queues",
         "description": "Background jobs and message bus consumers (Messenger, Laravel Queue)."
+      },
+      "vitals": {
+        "title": "Web Vitals",
+        "description": "Core Web Vitals (LCP, FCP, CLS, INP) at p75 with rating."
       }
     },
     "requests": {
@@ -662,6 +665,9 @@
       "saveChanges": "Save Changes",
       "toastSaved": "Alert settings saved",
       "toastFailed": "Failed to save alerts",
+      "toastChannelEnabled": "Channel enabled",
+      "toastChannelDisabled": "Channel disabled",
+      "toastFillConfig": "Fill in the configuration below, then save",
       "discordCardTitle": "Discord Notifications",
       "discordCardDescription": "Send alerts to Discord",
       "discordWebhookLabel": "Webhook URL",
@@ -1047,6 +1053,31 @@
       "statusUnresolved": "Unresolved",
       "statusResolved": "Resolved",
       "statusAll": "All statuses"
+    },
+    "flareList": {
+      "displaying": "Displaying {count} errors",
+      "displayingRange": "Displaying {count} errors from {from} to {to}",
+      "last24h": "Last 24h",
+      "last7d": "Last 7d",
+      "last30d": "Last 30d",
+      "all": "All",
+      "bucketEvents": "{count} events",
+      "bucketEmpty": "No events",
+      "selectAll": "Select all",
+      "selectError": "Select error",
+      "selected": "{count} selected",
+      "bulkHint": "Select errors to resolve or merge them.",
+      "merge": "Merge",
+      "resolve": "Resolve",
+      "reopen": "Reopen",
+      "resolved": "Resolved",
+      "open": "Open",
+      "moreActions": "More actions",
+      "viewDetails": "View details",
+      "occurrences": "Occurrences",
+      "users": "Users",
+      "lastOccurred": "Last occurred",
+      "firstOccurred": "First occurred"
     },
     "page": {
       "selected": "{count} selected",
@@ -1652,8 +1683,8 @@
       "description": "Cache operations grouped by op with hit rate"
     },
     "performanceHttp": {
-      "title": "HTTP Calls",
-      "description": "Outbound HTTP calls grouped by host and method"
+      "title": "External Calls",
+      "description": "Outbound HTTP calls to external services, grouped by host and method"
     },
     "performanceQueues": {
       "title": "Queues",
@@ -1678,7 +1709,7 @@
     "performanceRequests": "Performance · Requests",
     "performanceRequestDetail": "Performance · Endpoint",
     "performanceCache": "Performance · Cache",
-    "performanceHttp": "Performance · HTTP Calls",
+    "performanceHttp": "Performance · External Calls",
     "performanceDatabase": "Performance · Database",
     "performanceQueues": "Performance · Queues",
     "performanceWebVitals": "Performance · Web Vitals",

@@ -1,10 +1,7 @@
-export { SlowestTable } from './SlowestTable';
-export { TransactionsTable } from './TransactionsTable';
-export { TransactionsDataTable } from './TransactionsDataTable';
+export { TransactionsDataTable, SlowestTable } from './TransactionsDataTable';
 export { TransactionDetail } from './TransactionDetail';
 export { SpanBreakdownOverview } from './SpanBreakdownOverview';
 export { QueryInsights } from './QueryInsights';
-export { ApdexGauge } from './ApdexGauge';
 export { EndpointImpact } from './EndpointImpact';
 export { MetricRibbon } from './MetricRibbon';
 export { ThroughputChart } from './ThroughputChart';

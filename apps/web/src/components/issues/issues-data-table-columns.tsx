@@ -46,6 +46,8 @@ export interface IssueGroup {
   status?: "unresolved" | "resolved"
   resolvedAt?: Date | string | null
   resolvedBy?: string | null
+  exceptionType?: string
+  exceptionValue?: string
 }
 
 interface IssuesDataTableColumnsProps {

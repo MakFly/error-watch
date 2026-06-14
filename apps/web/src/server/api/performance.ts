@@ -14,6 +14,7 @@ import type {
   QueueSummary,
   EndpointDetail,
   PerformanceDateRange,
+  WebVitalsResponse,
 } from './types';
 
 export const getTransactions = async (
@@ -149,5 +150,15 @@ export const getEndpointDetail = async (
   params.set("name", name);
   if (dateRange) params.set("dateRange", dateRange);
   return fetchAPI<EndpointDetail>(`/performance/endpoint-detail?${params.toString()}`);
+};
+
+export const getWebVitals = async (
+  projectId: string,
+  dateRange?: PerformanceDateRange
+): Promise<WebVitalsResponse> => {
+  const params = new URLSearchParams();
+  params.set("projectId", projectId);
+  if (dateRange) params.set("dateRange", dateRange);
+  return fetchAPI<WebVitalsResponse>(`/performance/web-vitals?${params.toString()}`);
 };
 

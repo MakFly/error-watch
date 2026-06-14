@@ -236,8 +236,8 @@ export function LogDetailModal({ log, open, onOpenChange, orgSlug, projectSlug }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "fixed left-[50%] top-[4dvh] z-50 flex max-h-[92dvh] w-[min(calc(100vw-2rem),72rem)] -translate-x-1/2 translate-y-0 flex-col gap-0 overflow-hidden p-0",
-          "sm:top-[5dvh] lg:w-[min(calc(100vw-4rem),80rem)]",
+          "flex w-[min(calc(100vw-1.5rem),96rem)] max-w-none max-h-[92dvh] flex-col gap-0 overflow-hidden p-0",
+          "sm:w-[min(calc(100vw-4rem),104rem)]",
         )}
       >
         <DialogHeader className={shellHeaderClass}>

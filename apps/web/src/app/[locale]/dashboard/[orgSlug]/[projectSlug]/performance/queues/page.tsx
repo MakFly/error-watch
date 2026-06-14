@@ -15,18 +15,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { cn } from "@/lib/utils";
+import { formatMs, durationCls } from "@/lib/format-duration";
 import type { PerformanceDateRange, QueueOpSummary } from "@/server/api/types";
-
-function formatMs(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
-}
-
-function durationCls(ms: number): string {
-  if (ms >= 1000) return "text-status-critical";
-  if (ms >= 300) return "text-status-warning";
-  return "text-foreground";
-}
 
 function opBadgeCls(op: string): string {
   if (op.endsWith(".publish") || op.endsWith(".dispatch")) {

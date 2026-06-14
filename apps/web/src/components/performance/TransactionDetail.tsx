@@ -7,13 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AlertTriangle, Copy } from "lucide-react";
+import { formatMs } from "@/lib/format-duration";
 import type { TransactionWithSpans, Span } from "@/server/api/types";
 import { EmbeddedLogsPanel } from "@/components/logs/EmbeddedLogsPanel";
-
-function formatDuration(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${ms}ms`;
-}
 
 function formatDate(date: Date | string): string {
   const d = date instanceof Date ? date : new Date(date);
@@ -169,13 +165,13 @@ function SpanBar({ span, totalDuration, transactionStart, repetition }: {
       </div>
       <div className="w-[300px] shrink-0 flex items-center gap-2">
         <span className="w-[64px] shrink-0 text-right text-[10px] font-mono text-foreground">
-          {formatDuration(span.duration)}
+          {formatMs(span.duration)}
         </span>
         <span className="truncate text-xs text-muted-foreground flex-1">
           {span.description || "—"}
         </span>
         <span className="text-[10px] font-mono text-muted-foreground/80 flex-shrink-0">
-          +{formatDuration(safeOffsetMs)} to +{formatDuration(spanEndOffsetMs)}
+          +{formatMs(safeOffsetMs)} to +{formatMs(spanEndOffsetMs)}
         </span>
         {isRepeated && (
           <Badge
@@ -251,7 +247,7 @@ function SpanBreakdown({ spans, totalDuration }: { spans: Span[]; totalDuration:
                   />
                 </div>
                 <span className="w-[60px] shrink-0 text-right text-xs font-mono">
-                  {formatDuration(totalMs)}
+                  {formatMs(totalMs)}
                 </span>
                 <span className="w-[40px] shrink-0 text-right text-xs text-muted-foreground">
                   {pct.toFixed(0)}%
@@ -299,7 +295,7 @@ function WaterfallGrid({ spans, totalDuration, transactionStart }: {
                   className={`absolute top-0 ${i === 0 ? "left-0 -translate-x-0" : i === ticks.length - 1 ? "right-0 translate-x-0" : "-translate-x-1/2"}`}
                   style={i === ticks.length - 1 ? undefined : { left: `${tick}%` }}
                 >
-                  +{formatDuration((totalDuration * tick) / 100)}
+                  +{formatMs((totalDuration * tick) / 100)}
                 </div>
               ))}
             </div>
@@ -404,7 +400,7 @@ export function TransactionDetail({
               <div>
                 <p className="text-xs text-muted-foreground">{t("duration")}</p>
                 <p className="text-sm font-medium font-mono">
-                  {formatDuration(transaction.duration)}
+                  {formatMs(transaction.duration)}
                 </p>
               </div>
               <div>
@@ -458,7 +454,7 @@ export function TransactionDetail({
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t("queryStats.totalTime")}</p>
-                  <p className="text-sm font-medium font-mono">{formatDuration(queryStats.total_query_time)}</p>
+                  <p className="text-sm font-medium font-mono">{formatMs(queryStats.total_query_time)}</p>
                 </div>
               </div>
             </CardContent>
@@ -476,7 +472,7 @@ export function TransactionDetail({
               <ul className="text-sm space-y-1">
                 {sdkN1Queries.map((q) => (
                   <li key={q.query_pattern}>
-                    <code className="text-xs">{q.query_pattern}</code> — {q.count} times (total: {formatDuration(q.total_duration)})
+                    <code className="text-xs">{q.query_pattern}</code> — {q.count} times (total: {formatMs(q.total_duration)})
                   </li>
                 ))}
               </ul>

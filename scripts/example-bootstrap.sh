@@ -218,7 +218,7 @@ if [ -n "${EXAMPLE_API_KEY:-}" ]; then
   esac
   echo -e "${YELLOW}Pinning example to provided API key (skipping auto-seed)${RESET}"
   {
-    grep -vE "^ERRORWATCH_(ENABLED|ENDPOINT|API_KEY)=" "$ENV_FILE" 2>/dev/null || true
+    grep -vE "^ERRORWATCH_(ENABLED|ENDPOINT|API_KEY|PROTOCOL|PROFILER|SERVER_NAME|GIT_COMMIT|GIT_BRANCH|GIT_DIRTY|TRANSPORT_MODE)=" "$ENV_FILE" 2>/dev/null || true
     echo "ERRORWATCH_ENABLED=true"
     echo "ERRORWATCH_ENDPOINT=$API_URL"
     echo "ERRORWATCH_API_KEY=$EXAMPLE_API_KEY"
@@ -275,7 +275,7 @@ EOF
 
   # Write/overwrite ERRORWATCH_* in .env
   {
-    grep -vE "^ERRORWATCH_(ENABLED|ENDPOINT|API_KEY)=" "$ENV_FILE" 2>/dev/null || true
+    grep -vE "^ERRORWATCH_(ENABLED|ENDPOINT|API_KEY|PROTOCOL|PROFILER|SERVER_NAME|GIT_COMMIT|GIT_BRANCH|GIT_DIRTY|TRANSPORT_MODE)=" "$ENV_FILE" 2>/dev/null || true
     echo "ERRORWATCH_ENABLED=true"
     echo "ERRORWATCH_ENDPOINT=$API_URL"
     echo "ERRORWATCH_API_KEY=$API_KEY"
@@ -283,6 +283,16 @@ EOF
   mv "$ENV_FILE.tmp" "$ENV_FILE"
   echo -e "${GREEN}  ✓ Seeded org=$ORG_SLUG project=$PROJECT_SLUG${RESET}"
 else
+  # Existing key path: still enforce the profiler demo transport/settings so
+  # rerunning the example validates the dashboard's real profile sections.
+  {
+    grep -vE "^ERRORWATCH_(ENABLED|ENDPOINT|API_KEY|PROTOCOL|PROFILER|SERVER_NAME|GIT_COMMIT|GIT_BRANCH|GIT_DIRTY|TRANSPORT_MODE)=" "$ENV_FILE" 2>/dev/null || true
+    echo "ERRORWATCH_ENABLED=true"
+    echo "ERRORWATCH_ENDPOINT=$API_URL"
+    echo "ERRORWATCH_API_KEY=$CURRENT_KEY"
+  } > "$ENV_FILE.tmp"
+  mv "$ENV_FILE.tmp" "$ENV_FILE"
+
   # Re-derive ORG_SLUG / PROJECT_SLUG for the dashboard URL print at the end,
   # unless they were already filled by the EXAMPLE_API_KEY lookup above.
   : "${ORG_SLUG:=errorwatch-examples}"
@@ -351,9 +361,19 @@ case "$NAME" in
     (cd "$EXAMPLE_DIR" && for i in 1 2 3; do php bin/console app:cron:demo --quiet 2>/dev/null || true; done) || true
     ;;
   laravel)
-    for path in api/v1/test/error api/v1/test/warning api/v1/test/divide-by-zero; do
-      hit "http://localhost:$PORT/$path"
+    for i in 1 2 3 4 5; do
+      hit "http://localhost:$PORT/api/v1/test/error?sample=$i"
     done
+    for i in 1 2 3; do
+      hit "http://localhost:$PORT/api/v1/test/warning?sample=$i"
+      hit "http://localhost:$PORT/api/v1/test/perf/slow?sample=$i"
+      hit "http://localhost:$PORT/api/v1/test/perf/n-plus-one?sample=$i"
+      hit "http://localhost:$PORT/api/v1/test/perf/cache?sample=$i"
+    done
+    for i in 1 2; do
+      hit "http://localhost:$PORT/api/v1/test/divide-by-zero?sample=$i"
+    done
+    hit "http://localhost:$PORT/api/v1/test/perf/external-call?sample=1"
     ;;
 esac
 echo -e "${GREEN}  ✓ Sample data sent.${RESET}"

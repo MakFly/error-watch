@@ -15,11 +15,7 @@ import {
   groupTransactions,
   type GroupedTransaction,
 } from "./transactions-data-table-columns";
-
-function formatDuration(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
-}
+import { formatMs } from "@/lib/format-duration";
 
 interface TransactionsDataTableProps {
   transactions: Transaction[];
@@ -168,10 +164,10 @@ export function SlowestTable({ transactions, isLoading = false }: SlowestTablePr
               </div>
               <div className="text-right">
                 <p className="font-mono text-sm font-medium text-destructive">
-                  {formatDuration(t.avgDuration)}
+                  {formatMs(t.avgDuration)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  max {formatDuration(t.maxDuration)}
+                  max {formatMs(t.maxDuration)}
                 </p>
               </div>
             </div>

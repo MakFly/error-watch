@@ -117,6 +117,69 @@ function resolveStatsWindow(from?: string, to?: string): { from: Date; to: Date 
   return { from: fromDate, to: toDate };
 }
 
+const LOG_STATUS_CODE_PATHS = [
+  ["status_code"],
+  ["statusCode"],
+  ["http_status_code"],
+  ["http.status_code"],
+  ["response_status_code"],
+  ["response.status_code"],
+  ["http", "status_code"],
+  ["response", "status_code"],
+  ["tags", "status_code"],
+  ["tags", "statusCode"],
+  ["tags", "http_status_code"],
+  ["tags", "http.status_code"],
+  ["tags", "response_status_code"],
+  ["tags", "response.status_code"],
+] as const;
+
+function resolveNestedStatusCode(input: unknown): number | null {
+  if (typeof input !== "object" || input === null) return null;
+
+  const candidates: unknown[] = [];
+  const source = input as Record<string, unknown>;
+
+  for (const path of LOG_STATUS_CODE_PATHS) {
+    let current: unknown = source;
+    let found = true;
+
+    for (const segment of path) {
+      if (typeof current !== "object" || current === null || !(segment in current)) {
+        found = false;
+        break;
+      }
+      current = (current as Record<string, unknown>)[segment];
+    }
+
+    if (found) {
+      candidates.push(current);
+    }
+  }
+
+  candidates.push(source["status_code"]);
+  candidates.push(source["status"]);
+
+  for (const candidate of candidates) {
+    const code = coerceStatusCode(candidate);
+    if (code !== null) return code;
+  }
+
+  return null;
+}
+
+function resolveLogStatusCode(
+  input: z.infer<typeof logsIngestSchema>,
+): number | null {
+  const topLevelStatus = coerceStatusCode(input.status_code);
+  if (topLevelStatus !== null) return topLevelStatus;
+
+  return (
+    resolveNestedStatusCode(input.context) ??
+    resolveNestedStatusCode(input.extra)
+  );
+}
+
 function buildLogFilterConditions(
   input: z.infer<typeof logsFilterSchema>,
   options?: { applyDefaultWindow?: boolean },
@@ -208,7 +271,7 @@ export function buildLogRow(
   const sanitizedContext = scrubPIIValue(input.context ?? null);
   const sanitizedExtra = scrubPIIValue(input.extra ?? null);
   const sanitizedUrl = input.url ? scrubPII(input.url) : null;
-  const statusCode = coerceStatusCode(input.status_code);
+  const statusCode = resolveLogStatusCode(input);
   const entryId = crypto.randomUUID();
 
   return {
