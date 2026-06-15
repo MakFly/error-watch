@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { useQueryStates, parseAsInteger, parseAsString, parseAsStringLiteral } from "nuqs";
 import { useCurrentProject } from "@/contexts/ProjectContext";
 import { useCurrentOrganization } from "@/contexts/OrganizationContext";
 import { useGroups, useMergeGroups } from "@/lib/trpc/hooks";
@@ -25,17 +26,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "next-intl";
 
-type DateRange = "24h" | "7d" | "30d" | "90d" | "all";
-type StatusFilter = "unresolved" | "resolved" | "all";
-
-interface FiltersState {
-  env: string;
-  dateRange: DateRange;
-  search: string;
-  level: string;
-  httpStatus: string;
-  status: StatusFilter;
-}
+const DATE_RANGES = ["24h", "7d", "30d", "90d", "all"] as const;
+const STATUSES = ["unresolved", "resolved", "all"] as const;
+type DateRange = (typeof DATE_RANGES)[number];
+type StatusFilter = (typeof STATUSES)[number];
 
 export default function IssuesPage() {
   const { currentProjectId, currentProjectSlug } = useCurrentProject();
@@ -44,15 +38,23 @@ export default function IssuesPage() {
   const tHeader = useTranslations("pageHeader.issues");
   const tIssuesHeader = useTranslations("issues.header");
 
-  const [filters, setFilters] = useState<FiltersState>({
-    env: "all",
-    dateRange: "all",
-    search: "",
-    level: "actionable",
-    httpStatus: "",
-    status: "unresolved",
-  });
-  const [page, setPage] = useState(1);
+  // Filters + pagination live in the URL (nuqs) so a refresh or shared link
+  // keeps the current page and filter state. Default values are stripped from
+  // the URL (clearOnDefault), and we use replace to avoid history spam while
+  // typing in the search box.
+  const [filters, setFilters] = useQueryStates(
+    {
+      env: parseAsString.withDefault("all"),
+      dateRange: parseAsStringLiteral(DATE_RANGES).withDefault("all"),
+      search: parseAsString.withDefault(""),
+      level: parseAsString.withDefault("all"),
+      httpStatus: parseAsString.withDefault(""),
+      status: parseAsStringLiteral(STATUSES).withDefault("unresolved"),
+      page: parseAsInteger.withDefault(1),
+    },
+    { history: "replace", clearOnDefault: true },
+  );
+  const page = filters.page;
   const [selectedFingerprints, setSelectedFingerprints] = useState<string[]>([]);
 
   const debouncedSearch = useDebounce(filters.search, 300);
@@ -113,20 +115,13 @@ export default function IssuesPage() {
     filters.env !== "all" ||
     filters.dateRange !== "all" ||
     filters.search !== "" ||
-    filters.level !== "actionable" ||
+    filters.level !== "all" ||
     filters.httpStatus !== "" ||
     filters.status !== "unresolved";
 
   const handleClearFilters = () => {
-    setFilters({
-      env: "all",
-      dateRange: "all",
-      search: "",
-      level: "actionable",
-      httpStatus: "",
-      status: "unresolved",
-    });
-    setPage(1);
+    // Passing null resets every key to its default and strips them from the URL.
+    setFilters(null);
   };
 
   const handleMerge = useCallback(async () => {
@@ -176,17 +171,17 @@ export default function IssuesPage() {
       <div className="flex items-end justify-between gap-4">
         <FiltersRow
           search={filters.search}
-          onSearchChange={(value) => { setFilters({ ...filters, search: value }); setPage(1); }}
+          onSearchChange={(value) => setFilters({ search: value, page: 1 })}
           environment={filters.env}
-          onEnvironmentChange={(value) => { setFilters({ ...filters, env: value }); setPage(1); }}
+          onEnvironmentChange={(value) => setFilters({ env: value, page: 1 })}
           dateRange={filters.dateRange}
-          onDateRangeChange={(value) => { setFilters({ ...filters, dateRange: value }); setPage(1); }}
+          onDateRangeChange={(value) => setFilters({ dateRange: value, page: 1 })}
           level={filters.level}
-          onLevelChange={(value) => { setFilters({ ...filters, level: value }); setPage(1); }}
+          onLevelChange={(value) => setFilters({ level: value, page: 1 })}
           httpStatus={filters.httpStatus}
-          onHttpStatusChange={(value) => { setFilters({ ...filters, httpStatus: value }); setPage(1); }}
+          onHttpStatusChange={(value) => setFilters({ httpStatus: value, page: 1 })}
           status={filters.status}
-          onStatusChange={(value) => { setFilters({ ...filters, status: value }); setPage(1); }}
+          onStatusChange={(value) => setFilters({ status: value, page: 1 })}
           onClear={handleClearFilters}
           hasActiveFilters={hasActiveFilters}
           className="flex-1"
@@ -207,7 +202,7 @@ export default function IssuesPage() {
         onMergeSelected={handleMerge}
         isMerging={mergeGroups.isPending}
         dateRange={filters.dateRange}
-        onDateRangeChange={(value) => { setFilters({ ...filters, dateRange: value }); setPage(1); }}
+        onDateRangeChange={(value) => setFilters({ dateRange: value, page: 1 })}
       />
 
       {/* Server-side pagination controls */}
@@ -220,7 +215,7 @@ export default function IssuesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => setFilters({ page: Math.max(1, page - 1) })}
               disabled={page <= 1 || isLoading}
             >
               {t("previous")}
@@ -228,7 +223,7 @@ export default function IssuesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => setFilters({ page: Math.min(totalPages, page + 1) })}
               disabled={page >= totalPages || isLoading}
             >
               {t("next")}

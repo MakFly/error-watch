@@ -130,13 +130,13 @@ export function FiltersRow({
 
       {/* Level */}
       {onLevelChange && (
-        <Select value={level || "actionable"} onValueChange={onLevelChange}>
-          <SelectTrigger className={cn("w-full sm:w-[140px]", controlClassName)}>
-            <SelectValue placeholder={t("levelActionable")} />
+        <Select value={level || "all"} onValueChange={onLevelChange}>
+          <SelectTrigger className={cn("w-full sm:w-auto sm:min-w-[150px]", controlClassName)}>
+            <SelectValue placeholder={t("levelAll")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="actionable">{t("levelActionable")}</SelectItem>
             <SelectItem value="all">{t("levelAll")}</SelectItem>
+            <SelectItem value="actionable">{t("levelActionable")}</SelectItem>
             <SelectItem value="fatal">{t("levelFatal")}</SelectItem>
             <SelectItem value="error">{t("levelError")}</SelectItem>
             <SelectItem value="warning">{t("levelWarning")}</SelectItem>
